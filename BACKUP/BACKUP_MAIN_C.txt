@@ -1,0 +1,298 @@
+/*
+ * Project		: ZephC LTE Gateway
+ * Version		: 1.0
+ * Revision		: 1.0
+ *
+ * Author		: REDWOLF DiGiTAL [C. Worakan]
+ */
+
+#include "main.h"
+#include "usb_device.h"
+#include "usbd_cdc_if.h"
+#include <string.h>
+
+
+
+
+//uint16_t main_ms_counter = 0;
+
+
+char textBuffer[125];
+int debugValue = 0;
+
+//uint8_t Rx1Buff[Rx1Buff_Size];
+//uint8_t Rx2Buff[Rx2Buff_Size];
+//uint8_t dataComm_mainBuff[dataComm_MainBuff_S];
+//uint8_t lteComm_MainBuff[lteComm_MainBuff_S];
+
+char Rx1Buff[Rx1Buff_Size];
+char Rx2Buff[Rx2Buff_Size];
+char dataComm_mainBuff[dataComm_MainBuff_S];
+char lteComm_MainBuff[lteComm_MainBuff_S];
+
+
+
+TIM_HandleTypeDef htim4;
+UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart2_rx;
+
+// custom HandleTypeDef
+SysTimer_HandleTypeDef sysCounter;
+SysFlag_HandleTypeDef sysFlag;
+
+
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_TIM4_Init(void);
+
+
+
+int main(void) {
+
+  sysValinit();
+
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
+  MX_USB_DEVICE_Init();
+  MX_TIM4_Init();
+
+
+
+  // TIMER4 START
+  HAL_TIM_Base_Start_IT(&htim4);
+
+
+  // DMA LTE
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)Rx2Buff, Rx2Buff_Size);
+  __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+
+  //DMA commMaster
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)Rx1Buff, Rx1Buff_Size);
+  __HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
+
+
+
+
+
+  /*
+   *			MAIN CODE
+   * */
+
+  // Wait LTE module boot
+  while(sysCounter.main_ms_counter < LTEbootTime);
+  initLTE();
+
+
+  while(1) {
+	  //code
+
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+// user custom functions
+
+// init startup value at boot
+void sysValinit(void) {
+	sysCounter.main_ms_counter = 0;
+	sysCounter.prev_LTEtimeout = 0;
+	sysCounter.CMDrespTime = 500;	// 500 ms
+
+	sysFlag.LTE_CMD_Send = 0;
+	sysFlag.LTE_ERROR = 0;
+}
+
+
+// Send text via USB VCOM port
+void SerialDebug(char *msgDebug) {
+	CDC_Transmit_FS((uint8_t *) msgDebug, strlen(msgDebug));
+}
+
+
+// UART Tx [Polling method]
+void SendData(char *msg) {
+	HAL_UART_Transmit(&huart1, (uint8_t *) msg, strlen(msg), 10);
+}
+
+void SendCMD_LTE(char *msg) {
+	HAL_UART_Transmit(&huart2, (uint8_t *) msg, strlen(msg), 10);
+}
+
+
+// UART Rx used DMA
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+	// For LTE module
+	if(huart -> Instance == USART2) {
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)Rx2Buff, Rx2Buff_Size);
+
+		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));				// Clear main buffer
+		memcpy(lteComm_MainBuff, Rx2Buff, Size);								// Copy char from UART buffer -> main buffer
+		memset(Rx2Buff, 0x00, sizeof(Rx2Buff));									// Clear UART buffer
+		__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+	}
+
+	// For communicate with master
+	if(huart -> Instance == USART1) {
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)Rx1Buff, Rx1Buff_Size);
+
+		memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));				// Clear main buffer
+		memcpy(dataComm_mainBuff, Rx1Buff, Size);								// Copy char from UART buffer -> main buffer
+		memset(Rx1Buff, 0x00, sizeof(Rx1Buff));									// Clear UART buffer
+		__HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
+	}
+}
+
+
+// Timer4 call back
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim -> Instance == TIM4) {
+		sysCounter.main_ms_counter++;
+	}
+}
+
+
+// EC25 functions
+
+// init sequence
+void initLTE(void) {
+	unsigned char respondCode = 0;
+	SerialDebug("[MCU] -> start initialize LTE module\r\n");
+
+	for(unsigned char countSeq = 0; countSeq < 7; countSeq++) {
+
+
+		switch(countSeq) {
+			// Turn off echo
+			case 0 :
+				sprintf(textBuffer, "ATE0\r\n");
+				break;
+			// Set frequency band
+
+			case 1 :
+				sprintf(textBuffer, "AT+QCFG=\"Band\",511,1\r\n");
+				break;
+
+			// Disavle GNSS
+			case 2 :
+				sprintf(textBuffer, "AT+QGPSEND\r\n");
+				break;
+
+			// Output via debug UART port
+			case 3 :
+				sprintf(textBuffer, "AT+QGPSCFG=\"outport\",\"uartdebug\"\r\n");
+				break;
+
+			// Enable NMEA
+			case 4 :
+				sprintf(textBuffer, "AT+QGPSCFG=\"nmeasrc\",1\r\n");
+				break;
+
+			// GPS NMEA output type RMC(2) + GSV(4) + GSA(8)
+			case 5 :
+				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",14\r\n");
+				break;
+
+			// Turn on GNSS mode 1 : Stand-alone
+			case 6 :
+				sprintf(textBuffer, "AT+QGPS=1\r\n");
+				break;
+		}
+
+
+		SendCMD_LTE((char *)textBuffer);						// Send CMD
+		sysFlag.LTE_CMD_Send = 1;
+		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+
+
+		while(sysFlag.LTE_CMD_Send == 1) {
+			respondCode = LTErespondOK((char *)lteComm_MainBuff, lteComm_MainBuff_S);
+
+			// respond OK
+			if(respondCode == 1) {
+				SerialDebug("[LTE] -> OK\r\n");
+				sysFlag.LTE_CMD_Send = 0;
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+				goto CLEARMAINBUFF;
+			}
+
+			// respond Error
+			if(respondCode == 2) {
+				// pass through error message
+				SerialDebug("[LTE] -> ");
+				SerialDebug((char *)lteComm_MainBuff);
+
+				sysFlag.LTE_CMD_Send = 0;
+				sysFlag.LTE_ERROR = 1;
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+				goto CLEARMAINBUFF;
+			}
+
+			// Timeout functions
+			while((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
+				SerialDebug("[MCU] -> LTE TIMEOUT!\r\n");
+				sysFlag.LTE_CMD_Send = 0;
+				sysFlag.LTE_ERROR = 1;
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+				goto CLEARMAINBUFF;
+			}
+		}
+	CLEARMAINBUFF:
+		memset(textBuffer, 0x00, sizeof(textBuffer));
+		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+	}
+}
+
+
+
+/*
+ * * @brief check for module is respond CMD (check only OK)
+ */
+int LTErespondOK(char* inStr, uint16_t len) {
+	for(uint16_t i = 0; i < len-1; i++) {
+
+		// found OK
+		if(inStr[i] == 'O' && inStr[i+1] == 'K') {
+			return 1;
+		}
+
+		// found ERROR
+		if(inStr[i] == 'E' && (inStr[i+1] == 'R' && (inStr[i+2] == 'R' && (inStr[i+3] == 'O' && inStr[i+4] == 'R')))) {
+			return 2;
+		}
+	}
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
