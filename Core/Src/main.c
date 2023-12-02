@@ -87,10 +87,12 @@ int main(void) {
    * */
 
   // Wait LTE module boot
+BOOTSEQ :
+
   HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
   HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
   while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
-  SerialDebug("[MCU] -> Wait system boot\r\n");
+  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
 
   while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
   initLTE();											// Start init LTE module
@@ -137,7 +139,7 @@ void sysValinit(void) {
 	sysCounter.prev_LTEtimeout = 0;
 	sysCounter.prev_ERRORtime = 0;
 
-	sysCounter.CMDrespTime = 500;	// 500 ms
+	sysCounter.CMDrespTime = 1000;	// 1sec.
 
 	sysFlag.LTE_CMD_Send = 0;
 	sysFlag.LTE_ERROR = 0;
@@ -196,10 +198,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 // init sequence
 void initLTE(void) {
-	unsigned char respondCode = 0;
 	SerialDebug("[MCU] -> start initialize LTE module\r\n");
 
-	for(unsigned char countSeq = 0; countSeq < 7; countSeq++) {
+	for(unsigned char countSeq = 0; countSeq < 8; countSeq++) {
 
 
 		switch(countSeq) {
@@ -207,37 +208,44 @@ void initLTE(void) {
 			case 0 :
 				sprintf(textBuffer, "ATE0\r\n");
 				break;
-			// Set frequency band
 
+			// Low -> High on DTR: Change to command mode while remaining the connected call
 			case 1 :
+				sprintf(textBuffer, "AT&D1\r\n");
+				break;
+
+			// Set frequency band
+			case 2 :
 				sprintf(textBuffer, "AT+QCFG=\"Band\",511,1\r\n");
 				break;
 
-			// Disavle GNSS
-			case 2 :
+			// Disable GNSS
+			case 3 :
 				sprintf(textBuffer, "AT+QGPSEND\r\n");
 				break;
 
 			// Output via debug UART port
-			case 3 :
+			case 4 :
 				sprintf(textBuffer, "AT+QGPSCFG=\"outport\",\"uartdebug\"\r\n");
 				break;
 
 			// Enable NMEA
-			case 4 :
+			case 5 :
 				sprintf(textBuffer, "AT+QGPSCFG=\"nmeasrc\",1\r\n");
 				break;
 
-			// GPS NMEA output type RMC(2) + GSV(4) + GSA(8)
-			case 5 :
-				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",14\r\n");
+			// NMEA type output GPRMC only
+			case 6 :
+				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n");
 				break;
 
-			// Turn on GNSS mode 1 : Stand-alone
-			case 6 :
+			// // Turn on GNSS mode 1 : Stand-alone
+			case 7 :
 				sprintf(textBuffer, "AT+QGPS=1\r\n");
 				break;
+
 		}
+
 
 
 		SendCMD_LTE((char *)textBuffer);						// Send CMD
@@ -246,62 +254,63 @@ void initLTE(void) {
 
 
 		while(sysFlag.LTE_CMD_Send == 1) {
-			respondCode = LTErespondOK((char *)lteComm_MainBuff, lteComm_MainBuff_S);
-
-			// respond OK
-			if(respondCode == 1) {
+			if(findTarget(lteComm_MainBuff, "OK") == 1) {
 				SerialDebug("[LTE] -> OK\r\n");
+
 				sysFlag.LTE_CMD_Send = 0;
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 				goto CLEARMAINBUFF;
 			}
 
-			// respond Error
-			if(respondCode == 2) {
-				// pass through error message
+			else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
 				SerialDebug("[LTE] -> ");
 				SerialDebug((char *)lteComm_MainBuff);
+				SerialDebug("\r\n");
 
-				sysFlag.LTE_CMD_Send = 0;
 				sysFlag.LTE_ERROR = 1;
+				sysFlag.LTE_CMD_Send = 0;
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 				goto CLEARMAINBUFF;
 			}
 
-			// Timeout functions
-			while((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
-				SerialDebug("[MCU] -> LTE TIMEOUT!\r\n");
-				sysFlag.LTE_CMD_Send = 0;
+			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
+				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
+
 				sysFlag.LTE_ERROR = 1;
+				sysFlag.LTE_CMD_Send = 0;
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 				goto CLEARMAINBUFF;
 			}
+
+
 		}
-	CLEARMAINBUFF:
-		memset(textBuffer, 0x00, sizeof(textBuffer));
-		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+		CLEARMAINBUFF:
+			memset(textBuffer, 0x00, sizeof(textBuffer));
+			memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
 	}
 }
 
 
 
+
 /*
- * * @brief check for module is respond CMD (check only OK)
+ * @brief find string if match it return
+ * @retval 0 - Not found
+ * @retval 1 - found
  */
-int LTErespondOK(char* inStr, uint16_t len) {
-	for(uint16_t i = 0; i < len-1; i++) {
-
-		// found OK
-		if(inStr[i] == 'O' && inStr[i+1] == 'K') {
-			return 1;
-		}
-
-		// found ERROR
-		if(inStr[i] == 'E' && (inStr[i+1] == 'R' && (inStr[i+2] == 'R' && (inStr[i+3] == 'O' && inStr[i+4] == 'R')))) {
-			return 2;
-		}
-	}
-	return 0;
+int findTarget(const char *inStr, const char *target) {
+    int i, j;
+    for (i = 0; inStr[i] != '\0'; i++) {
+        j = 0;
+        while (target[j] != '\0' && inStr[i + j] == target[j]) {
+            j++;
+        }
+        if (target[j] == '\0') {
+            return 1; // Return 1 if found
+        }
+    }
+    return 0; // Return 0 if not found
 }
 
 

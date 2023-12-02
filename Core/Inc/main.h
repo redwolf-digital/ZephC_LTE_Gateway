@@ -44,7 +44,7 @@ void SendCMD_LTE(char *msg);
 
 void sysValinit(void);
 
-int LTErespondOK(char* inStr, uint16_t len);
+int findTarget(const char *inStr, const char *target);
 void initLTE(void);
 
 
