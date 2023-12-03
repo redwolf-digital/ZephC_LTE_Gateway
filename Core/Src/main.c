@@ -20,10 +20,6 @@
 char textBuffer[125];
 int debugValue = 0;
 
-//uint8_t Rx1Buff[Rx1Buff_Size];
-//uint8_t Rx2Buff[Rx2Buff_Size];
-//uint8_t dataComm_mainBuff[dataComm_MainBuff_S];
-//uint8_t lteComm_MainBuff[lteComm_MainBuff_S];
 
 char Rx1Buff[Rx1Buff_Size];
 char Rx2Buff[Rx2Buff_Size];
@@ -87,7 +83,7 @@ int main(void) {
    * */
 
   // Wait LTE module boot
-BOOTSEQ :
+
 
   HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
   HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
@@ -235,7 +231,7 @@ void initLTE(void) {
 				break;
 
 			// NMEA type output GPRMC only
-			case 6 :
+			case 6:
 				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n");
 				break;
 
@@ -254,6 +250,7 @@ void initLTE(void) {
 
 
 		while(sysFlag.LTE_CMD_Send == 1) {
+			// OK Conditions
 			if(findTarget(lteComm_MainBuff, "OK") == 1) {
 				SerialDebug("[LTE] -> OK\r\n");
 
@@ -262,17 +259,25 @@ void initLTE(void) {
 				goto CLEARMAINBUFF;
 			}
 
+			// ERROR Conditions
 			else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
 				SerialDebug("[LTE] -> ");
 				SerialDebug((char *)lteComm_MainBuff);
 				SerialDebug("\r\n");
 
-				sysFlag.LTE_ERROR = 1;
+				// Disable GNSS fail -> ignore error 505
+				if(countSeq == 3 && findTarget(lteComm_MainBuff, "505") == 1) {
+					sysFlag.LTE_ERROR = 0;
+				}else {
+					sysFlag.LTE_ERROR = 1;
+				}
+
 				sysFlag.LTE_CMD_Send = 0;
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 				goto CLEARMAINBUFF;
 			}
 
+			// Timeout Conditions
 			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
 				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
 
