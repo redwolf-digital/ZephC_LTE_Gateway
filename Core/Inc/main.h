@@ -28,6 +28,8 @@ typedef struct{
 	uint16_t prev_LTEtimeout;
 	uint16_t prev_ERRORtime;
 
+	uint8_t rebootCount;
+
 	uint16_t CMDrespTime;
 }SysTimer_HandleTypeDef;
 
@@ -46,6 +48,8 @@ void sysValinit(void);
 
 int findTarget(const char *inStr, const char *target);
 void initLTE(void);
+int networkRegStatus(void);
+int RebootLTE(void);
 
 
 void Error_Handler(void);

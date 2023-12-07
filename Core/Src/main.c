@@ -83,8 +83,7 @@ int main(void) {
    * */
 
   // Wait LTE module boot
-
-
+INIT_LTE :
   HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
   HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
   while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
@@ -94,19 +93,56 @@ int main(void) {
   initLTE();											// Start init LTE module
 
 
+  // Wait network register
+  SerialDebug("[MCU] -> Wait network register");
+
+  while(networkRegStatus() != 1) {
+	  if(sysCounter.rebootCount == 120) {
+		  sysCounter.rebootCount = 0;
+		  RebootLTE();
+		  goto INIT_LTE;
+	  }
+
+	  SerialDebug(".");
+	  sysCounter.rebootCount++;
+	  HAL_Delay(500);
+  }
+  sysCounter.rebootCount = 0;
+  SerialDebug("\r\n");
+
+
   HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY 0
   SerialDebug("[MCU] -> System init done\r\n");
 
+  SendCMD_LTE("AT+QGPS=1\r\n");							// Enable GNSS
+  SerialDebug("[MCU] -> Enable GNSS done\r\n");
+
+
+
+
+
+
+
   while(1) {
-	  //code
 	  // if LTE ERROR
 	  while(sysFlag.LTE_ERROR == 1) {
 		  if(sysCounter.main_ms_counter == 0) {
 			  sysCounter.prev_ERRORtime = 0;
 		  }
 
+
 		  while((sysCounter.main_ms_counter - sysCounter.prev_ERRORtime) >= 500) {
 			  HAL_GPIO_TogglePin(GPIOB, ERROR);
+			  sysCounter.rebootCount++;
+
+			  // restart after 10 sec. -> 20 tick.
+			  if(sysCounter.rebootCount == 20) {
+				  sysCounter.rebootCount = 0;
+				  RebootLTE();
+				  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
+				  goto INIT_LTE;
+			  }
+
 			  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
 		  }
 	  }
@@ -134,6 +170,7 @@ void sysValinit(void) {
 	sysCounter.main_ms_counter = 0;
 	sysCounter.prev_LTEtimeout = 0;
 	sysCounter.prev_ERRORtime = 0;
+	sysCounter.rebootCount = 0;
 
 	sysCounter.CMDrespTime = 1000;	// 1sec.
 
@@ -190,13 +227,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 
 
-// EC25 functions
 
+// EC25 functions
 // init sequence
 void initLTE(void) {
 	SerialDebug("[MCU] -> start initialize LTE module\r\n");
 
-	for(unsigned char countSeq = 0; countSeq < 8; countSeq++) {
+	for(unsigned char countSeq = 0; countSeq < 9; countSeq++) {
 
 
 		switch(countSeq) {
@@ -235,8 +272,13 @@ void initLTE(void) {
 				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n");
 				break;
 
+			// Set status network registration
+			case 7:
+				sprintf(textBuffer, "AT+CREG=1\r\n");
+				break;
+
 			// // Turn on GNSS mode 1 : Stand-alone
-			case 7 :
+			case 8 :
 				sprintf(textBuffer, "AT+QGPS=1\r\n");
 				break;
 
@@ -254,6 +296,7 @@ void initLTE(void) {
 			if(findTarget(lteComm_MainBuff, "OK") == 1) {
 				SerialDebug("[LTE] -> OK\r\n");
 
+
 				sysFlag.LTE_CMD_Send = 0;
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 				goto CLEARMAINBUFF;
@@ -265,10 +308,11 @@ void initLTE(void) {
 				SerialDebug((char *)lteComm_MainBuff);
 				SerialDebug("\r\n");
 
-				// Disable GNSS fail -> ignore error 505
+				// Case 3 : Disable GNSS fail -> ignore error 505
 				if(countSeq == 3 && findTarget(lteComm_MainBuff, "505") == 1) {
 					sysFlag.LTE_ERROR = 0;
-				}else {
+				}
+				else {
 					sysFlag.LTE_ERROR = 1;
 				}
 
@@ -297,6 +341,33 @@ void initLTE(void) {
 }
 
 
+int networkRegStatus(void) {
+	SendCMD_LTE("AT+CREG?\r\n");
+
+	if(findTarget(lteComm_MainBuff, "+CREG: 1") == 1) {
+		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+		return 1;
+	}
+
+	memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+	return 0;
+}
+
+
+/*
+ * @brief Reboot LTE module
+ * @retval 0 - wait
+ * @retval 1 - done
+ */
+int RebootLTE(void) {
+	SendCMD_LTE("AT+QPOWD\r\n");
+
+	while(findTarget(lteComm_MainBuff, "POWERED DOWN") != 1) {
+		return 0;
+	}
+	HAL_Delay(10000);
+	return 1;
+}
 
 
 /*

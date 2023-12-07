@@ -21,7 +21,7 @@ ERROR | if system have error | B | 9 | OUTPUT |
 
 
 ### Communications port
-***UART1*** - used for communicate between **gateway and master** via UART to RS232/485
+***UART1*** - used for communicate between **gateway and master** via UART to ***RS485***
 | Descriptions | setting |
 | :-- | :-- |
 Baud rate | 9600 |
@@ -54,3 +54,14 @@ Rx | A | 3 |
 | :-- | :-: | :-- |
 USB DP | A | 12 |
 USB DM | A | 11 |
+
+
+### Data frame
+
+| **Name** | BOX ID | HH/MM/SS | DD/MM/YY | X | Y | Z | HUMI | TEMP | MQ3 |CO2 | AIRFLOW | Q
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Data type** | Str | Str | Str | Float | Float | Float | Float | Float | Float | Float | Float | Str |
+
+***ex :***   
+A,17/39/00,7/12/23,123.45,123.45,123.45,99.00,3.55,0.0,0.32,0.45,Q  
+B,,,,,,,,,,,  
