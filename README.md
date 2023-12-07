@@ -58,10 +58,10 @@ USB DM | A | 11 |
 
 ### Data frame
 
-| **Name** | BOX ID | HH/MM/SS | DD/MM/YY | X | Y | Z | HUMI | TEMP | MQ3 |CO2 | AIRFLOW | Q
-| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| **Data type** | Str | Str | Str | Float | Float | Float | Float | Float | Float | Float | Float | Str |
+| **Name** | REQ. NODE | HH/MM/SS | DD/MM/YY | BOX ID | X | Y | Z | HUMI | TEMP | MQ3 |CO2 | AIRFLOW | Q
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |:-: |
+| **Data type** | Str | Str | Str |Str | Float | Float | Float | Float | Float | Float | Int | Int | Str |
 
 ***ex :***   
-A,17/39/00,7/12/23,123.45,123.45,123.45,99.00,3.55,0.0,0.32,0.45,Q  
-B,,,,,,,,,,,  
+A,20:2:0,29/11/23,A,4.36,3.41,2.47,91.6,12.1,1.14,976,599,Q  
+B,,,,,,,,,,,,
