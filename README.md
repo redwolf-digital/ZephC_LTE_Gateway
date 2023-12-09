@@ -58,10 +58,14 @@ USB DM | A | 11 |
 
 ### Data frame
 
+Gateway not process any data from master, Do only split and pass through data only
 | **Name** | REQ. NODE | HH/MM/SS | DD/MM/YY | BOX ID | X | Y | Z | HUMI | TEMP | MQ3 |CO2 | AIRFLOW | Q
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |:-: |
-| **Data type** | Str | Str | Str |Str | Float | Float | Float | Float | Float | Float | Int | Int | Str |
+| **Data type** | Str | Str | Str |Str | Str | Str | Str | Str | Str | Str | Str | Str | Str |
 
-***ex :***   
+
+***ex :*** 
+```
 A,20:2:0,29/11/23,A,4.36,3.41,2.47,91.6,12.1,1.14,976,599,Q  
 B,,,,,,,,,,,,
+```
