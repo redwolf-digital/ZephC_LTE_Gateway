@@ -56,7 +56,7 @@ USB DP | A | 12 |
 USB DM | A | 11 |
 
 
-### Data frame
+### RS485 Data frame
 
 Gateway not process any data from master, Do only split and pass through data only
 | **Name** | REQ. NODE | HH/MM/SS | DD/MM/YY | BOX ID | X | Y | Z | HUMI | TEMP | MQ3 |CO2 | AIRFLOW | Q
@@ -64,8 +64,34 @@ Gateway not process any data from master, Do only split and pass through data on
 | **Data type** | Str | Str | Str |Str | Str | Str | Str | Str | Str | Str | Str | Str | Str |
 
 
-***ex :*** 
+#### ***ex :*** 
 ```
+[Valid data]
 A,20:2:0,29/11/23,A,4.36,3.41,2.47,91.6,12.1,1.14,976,599,Q  
+
+[Fail/Empty data]
 B,,,,,,,,,,,,
 ```
+
+### Data list push to server
+
+
+| No. | Data | info/response code |
+| :-- | :-- | :-- |
+1 | GPS current latitude |
+2 | GPS current longitude |
+3 | GPS Status | *0 - GPS not valid<br> 1 - GPS valid<br> 2 - Use previous data from memory*
+4 | Sensor_ID_n|
+5 | Sensor_n_Status | 0 - No data<br> 1 - Data valid |
+6 | Sensor_n_time stamped |
+7 | Sensor_n_date stamped |
+8 | Sensor_n_X |
+9 | Sensor_n_Y |
+10 | Sensor_n_Z |
+11 | Sensor_n_HUIM |
+12 | Sensor_n_TEMP |
+13 | Sensor_n_MQ3 |
+14 | Sensor_n_CO2 |
+15 | Sensor_n_AIR FLOW |
+
+*n = A,B,C,D,E,...*  
