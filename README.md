@@ -16,7 +16,7 @@ Debug | general purpose output port for test <br> *normally not used* | B | 1 | 
 BUSY | for tell other device now gateway is busy | B | 5 | OUTPUT |
 ONLINE | for tell other device now gateway is online or offline | B | 6 | OUTPUT |
 RDY | for tell other device now gateway is ready to receive data | B | 7 | OUTPUT |
-RTS | for tell gateway wait to receive data | B | 8 | INPUT *Interrupt* |
+RTS | for tell gateway wait to receive data | B | 3 | INPUT *Interrupt* |
 ERROR | if system have error | B | 9 | OUTPUT |
 
 

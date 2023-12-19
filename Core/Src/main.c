@@ -11,6 +11,10 @@
 #include "usbd_cdc_if.h"
 #include <string.h>
 
+#include "msgProcess.h"
+#include "GNSSprocess.h"
+#include "EXITinti.h"
+
 
 
 
@@ -37,6 +41,7 @@ DMA_HandleTypeDef hdma_usart2_rx;
 // custom HandleTypeDef
 SysTimer_HandleTypeDef sysCounter;
 SysFlag_HandleTypeDef sysFlag;
+GNSS_HandleTypeDef GNSS;
 
 
 void SystemClock_Config(void);
@@ -61,6 +66,8 @@ int main(void) {
   MX_USB_DEVICE_Init();
   MX_TIM4_Init();
 
+  // INTERRUPT
+  initEXIT();
 
 
   // TIMER4 START
@@ -83,72 +90,95 @@ int main(void) {
    * */
 
   // Wait LTE module boot
-INIT_LTE :
-  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
-  HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
-  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
-  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
-
-  while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
-  initLTE();											// Start init LTE module
-
-
-  // Wait network register
-  SerialDebug("[MCU] -> Wait network register");
-
-  while(networkRegStatus() != 1) {
-	  if(sysCounter.rebootCount == 120) {
-		  sysCounter.rebootCount = 0;
-		  RebootLTE();
-		  goto INIT_LTE;
-	  }
-
-	  SerialDebug(".");
-	  sysCounter.rebootCount++;
-	  HAL_Delay(500);
-  }
-  sysCounter.rebootCount = 0;
-  SerialDebug("\r\n");
-
-
-  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY 0
-  SerialDebug("[MCU] -> System init done\r\n");
-
-  SendCMD_LTE("AT+QGPS=1\r\n");							// Enable GNSS
-  SerialDebug("[MCU] -> Enable GNSS done\r\n");
-
-
-
+//INIT_LTE :
+//  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
+//  HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
+//  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
+//  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
+//
+//  while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
+//  initLTE();											// Start init LTE module
+//
+//
+//  // Wait network register
+//  SerialDebug("[MCU] -> Wait network register");
+//
+//  while(networkRegStatus() != 1) {
+//	  if(sysCounter.rebootCount == 120) {
+//		  sysCounter.rebootCount = 0;
+//		  RebootLTE();
+//		  goto INIT_LTE;
+//	  }
+//
+//	  SerialDebug(".");
+//	  sysCounter.rebootCount++;
+//	  HAL_Delay(500);
+//  }
+//  sysCounter.rebootCount = 0;
+//  SerialDebug("\r\n");
+//
+//
+//  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY 0
+//  SerialDebug("[MCU] -> System init done\r\n");
+//
+//  SendCMD_LTE("AT+QGPS=1\r\n");							// Enable GNSS
+//  SerialDebug("[MCU] -> Enable GNSS done\r\n");
+//
 
 
-
+/*
+ *  ===============================================================================
+ *
+ *  _____ _____ _____ _____    _____ _____ _____ _____ _____ _____ _____ _____
+ * |     |  _  |     |   | |  |  _  | __  |     |   __| __  |  _  |     |   __|
+ * | | | |     |-   -| | | |  |   __|    -|  |  |  |  |    -|     | | | |__   |
+ * |_|_|_|__|__|_____|_|___|  |__|  |__|__|_____|_____|__|__|__|__|_|_|_|_____|
+ *
+ *  ===============================================================================
+ */
 
   while(1) {
+
+	  // =====================================================================================
+	  // CODE UNDER TEST !!!!!!!!
+
 	  // if LTE ERROR
-	  while(sysFlag.LTE_ERROR == 1) {
-		  if(sysCounter.main_ms_counter == 0) {
-			  sysCounter.prev_ERRORtime = 0;
-		  }
+//	  while(sysFlag.LTE_ERROR == 1) {
+//		  if(sysCounter.main_ms_counter == 0) {
+//			  sysCounter.prev_ERRORtime = 0;
+//		  }
+//
+//
+//		  while((sysCounter.main_ms_counter - sysCounter.prev_ERRORtime) >= 500) {
+//			  HAL_GPIO_TogglePin(GPIOB, ERROR);
+//			  sysCounter.rebootCount++;
+//
+//			  // restart after 10 sec. -> 20 tick.
+//			  if(sysCounter.rebootCount == 20) {
+//				  sysCounter.rebootCount = 0;
+//				  RebootLTE();
+//				  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
+//				  goto INIT_LTE;
+//			  }
+//
+//			  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
+//		  }
+//	  }
+//
+//
+//	  // Ping every 5 min. for test internet is working
+//
+//	  // Call GNSS
+//	  while(callGNSS((unsigned char *)lteComm_MainBuff) == 1) {
+//		sprintf(textBuffer, "lat = %s \t lon = %s\r\n", latTemp, lonTemp);
+//		SerialDebug(textBuffer);
+//		clearText_buff();
+//	  }
+
+	 // =====================================================================================
 
 
-		  while((sysCounter.main_ms_counter - sysCounter.prev_ERRORtime) >= 500) {
-			  HAL_GPIO_TogglePin(GPIOB, ERROR);
-			  sysCounter.rebootCount++;
 
-			  // restart after 10 sec. -> 20 tick.
-			  if(sysCounter.rebootCount == 20) {
-				  sysCounter.rebootCount = 0;
-				  RebootLTE();
-				  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
-				  goto INIT_LTE;
-			  }
-
-			  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
-		  }
-	  }
-
-
-	  // Ping every 5 min. for test internet is working
 
   }
 }
@@ -233,7 +263,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 void initLTE(void) {
 	SerialDebug("[MCU] -> start initialize LTE module\r\n");
 
-	for(unsigned char countSeq = 0; countSeq < 9; countSeq++) {
+	for(unsigned char countSeq = 0; countSeq < 8; countSeq++) {
 
 
 		switch(countSeq) {
@@ -277,10 +307,10 @@ void initLTE(void) {
 				sprintf(textBuffer, "AT+CREG=1\r\n");
 				break;
 
-			// // Turn on GNSS mode 1 : Stand-alone
-			case 8 :
-				sprintf(textBuffer, "AT+QGPS=1\r\n");
-				break;
+//			// Turn on GNSS mode 1 : Stand-alone
+//			case 8 :
+//				sprintf(textBuffer, "AT+QGPS=1\r\n");
+//				break;
 
 		}
 
@@ -335,11 +365,18 @@ void initLTE(void) {
 		}
 
 		CLEARMAINBUFF:
-			memset(textBuffer, 0x00, sizeof(textBuffer));
-			memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+			clearText_buff();
+			clearLTE_buff();
 	}
 }
 
+
+void clearText_buff(void) {
+	memset(textBuffer, 0x00, sizeof(textBuffer));
+}
+void clearLTE_buff(void) {
+	memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+}
 
 int networkRegStatus(void) {
 	SendCMD_LTE("AT+CREG?\r\n");
@@ -597,19 +634,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+                          |GPIO_PIN_9, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PB1 PB5 PB6 PB7 PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_9;
+  /*Configure GPIO pins : PB1 PB5 PB6 PB7
+                           PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+                          |GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
