@@ -109,5 +109,5 @@ B,,,,,,,,,,,,
 
 
 ## Waveform
-![waveform1](..\img\waveform\waveform1.png)
+![waveform1](../img/waveform/waveform1.png)
 <br>timing diagram receive data from RS485<br>
