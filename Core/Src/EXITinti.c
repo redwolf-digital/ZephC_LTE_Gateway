@@ -34,3 +34,4 @@ void EXTI3_IRQHandler(void) {
 		EXTI -> PR |= EXTI_PR_PR3;
 	}
 }
+

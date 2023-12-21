@@ -14,15 +14,13 @@
 #include "msgProcess.h"
 #include "GNSSprocess.h"
 #include "EXITinti.h"
+#include "LTEdriver.h"
 
 
 
-
-//uint16_t main_ms_counter = 0;
 
 
 char textBuffer[125];
-int debugValue = 0;
 
 
 char Rx1Buff[Rx1Buff_Size];
@@ -42,6 +40,7 @@ DMA_HandleTypeDef hdma_usart2_rx;
 SysTimer_HandleTypeDef sysCounter;
 SysFlag_HandleTypeDef sysFlag;
 GNSS_HandleTypeDef GNSS;
+Sensor_HandleTypeDef SENSOR;
 
 
 void SystemClock_Config(void);
@@ -66,9 +65,6 @@ int main(void) {
   MX_USB_DEVICE_Init();
   MX_TIM4_Init();
 
-  // INTERRUPT
-  initEXIT();
-
 
   // TIMER4 START
   HAL_TIM_Base_Start_IT(&htim4);
@@ -84,20 +80,22 @@ int main(void) {
 
 
 
+  // INTERRUPT
+  initEXIT();
+
 
   /*
    *			MAIN CODE
    * */
 
   // Wait LTE module boot
-//INIT_LTE :
-//  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
-//  HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
-//  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
-//  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
-//
-//  while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
-//  initLTE();											// Start init LTE module
+  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
+  HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
+  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
+  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
+
+  while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
+  initLTE();											// Start init LTE module
 //
 //
 //  // Wait network register
@@ -177,6 +175,54 @@ int main(void) {
 
 	 // =====================================================================================
 
+
+	  // =====================================================================================
+	  // CODE UNDER TEST EXINT'
+
+	  while(intterruptEvent_Flag == 1) {
+		  SerialDebug("[MCU] -> GET RTS\r\n");
+		  memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));		// Clear buffer
+		  // Generate pulse 5ms.
+		  SerialDebug("[MCU] -> SEND RDY\r\n");
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+		  HAL_Delay(5);
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
+
+		  // Process data
+		  SerialDebug("[MCU] -> WAIT DATA\r\n");
+		  while(dataComm_mainBuff != 0x00);									// Wait DMA put data from UART to buffer
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);						// BUSY !!!!
+		  // Process data
+		  char REQNODE[1];
+		  char ENDBYTE[1];
+		  char COMPID[1];
+		  Delimiter(dataComm_mainBuff, ',', 0, 80, (unsigned char *)REQNODE);
+		  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)COMPID);
+		  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char *)ENDBYTE);
+
+		  if(REQNODE[1] == COMPID[1] && ENDBYTE[1] == 'Q') {
+			  SerialDebug("[MCU] -> RS485 data is valid\r\n");
+
+			  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char *)SENSOR.timeStemp);
+			  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char *)SENSOR.dateStamp);
+			  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)SENSOR.ID);
+			  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char *)SENSOR.X);
+			  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char *)SENSOR.Y);
+			  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char *)SENSOR.Z);
+			  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char *)SENSOR.Huim);
+			  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char *)SENSOR.Temp);
+			  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char *)SENSOR.Alc);
+			  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char *)SENSOR.Carbon);
+			  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char *)SENSOR.AirFlow);
+		  }else {
+			  SerialDebug("[MCU] -> RS485 data is not valid\r\n");
+		  }
+
+		  SerialDebug("[MCU] -> End data process\r\n");
+		  intterruptEvent_Flag = 0;
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);						// End process
+	  }
+	  // =====================================================================================
 
 
 
@@ -258,153 +304,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 
 
-// EC25 functions
-// init sequence
-void initLTE(void) {
-	SerialDebug("[MCU] -> start initialize LTE module\r\n");
-
-	for(unsigned char countSeq = 0; countSeq < 8; countSeq++) {
-
-
-		switch(countSeq) {
-			// Turn off echo
-			case 0 :
-				sprintf(textBuffer, "ATE0\r\n");
-				break;
-
-			// Low -> High on DTR: Change to command mode while remaining the connected call
-			case 1 :
-				sprintf(textBuffer, "AT&D1\r\n");
-				break;
-
-			// Set frequency band
-			case 2 :
-				sprintf(textBuffer, "AT+QCFG=\"Band\",511,1\r\n");
-				break;
-
-			// Disable GNSS
-			case 3 :
-				sprintf(textBuffer, "AT+QGPSEND\r\n");
-				break;
-
-			// Output via debug UART port
-			case 4 :
-				sprintf(textBuffer, "AT+QGPSCFG=\"outport\",\"uartdebug\"\r\n");
-				break;
-
-			// Enable NMEA
-			case 5 :
-				sprintf(textBuffer, "AT+QGPSCFG=\"nmeasrc\",1\r\n");
-				break;
-
-			// NMEA type output GPRMC only
-			case 6:
-				sprintf(textBuffer, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n");
-				break;
-
-			// Set status network registration
-			case 7:
-				sprintf(textBuffer, "AT+CREG=1\r\n");
-				break;
-
-//			// Turn on GNSS mode 1 : Stand-alone
-//			case 8 :
-//				sprintf(textBuffer, "AT+QGPS=1\r\n");
-//				break;
-
-		}
 
 
 
-		SendCMD_LTE((char *)textBuffer);						// Send CMD
-		sysFlag.LTE_CMD_Send = 1;
-		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 
 
-		while(sysFlag.LTE_CMD_Send == 1) {
-			// OK Conditions
-			if(findTarget(lteComm_MainBuff, "OK") == 1) {
-				SerialDebug("[LTE] -> OK\r\n");
 
 
-				sysFlag.LTE_CMD_Send = 0;
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-				goto CLEARMAINBUFF;
-			}
-
-			// ERROR Conditions
-			else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
-				SerialDebug("[LTE] -> ");
-				SerialDebug((char *)lteComm_MainBuff);
-				SerialDebug("\r\n");
-
-				// Case 3 : Disable GNSS fail -> ignore error 505
-				if(countSeq == 3 && findTarget(lteComm_MainBuff, "505") == 1) {
-					sysFlag.LTE_ERROR = 0;
-				}
-				else {
-					sysFlag.LTE_ERROR = 1;
-				}
-
-				sysFlag.LTE_CMD_Send = 0;
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-				goto CLEARMAINBUFF;
-			}
-
-			// Timeout Conditions
-			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
-				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
-
-				sysFlag.LTE_ERROR = 1;
-				sysFlag.LTE_CMD_Send = 0;
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-				goto CLEARMAINBUFF;
-			}
 
 
-		}
-
-		CLEARMAINBUFF:
-			clearText_buff();
-			clearLTE_buff();
-	}
-}
-
-
-void clearText_buff(void) {
-	memset(textBuffer, 0x00, sizeof(textBuffer));
-}
-void clearLTE_buff(void) {
-	memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
-}
-
-int networkRegStatus(void) {
-	SendCMD_LTE("AT+CREG?\r\n");
-
-	if(findTarget(lteComm_MainBuff, "+CREG: 1") == 1) {
-		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
-		return 1;
-	}
-
-	memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
-	return 0;
-}
-
-
-/*
- * @brief Reboot LTE module
- * @retval 0 - wait
- * @retval 1 - done
- */
-int RebootLTE(void) {
-	SendCMD_LTE("AT+QPOWD\r\n");
-
-	while(findTarget(lteComm_MainBuff, "POWERED DOWN") != 1) {
-		return 0;
-	}
-	HAL_Delay(10000);
-	return 1;
-}
 
 
 /*

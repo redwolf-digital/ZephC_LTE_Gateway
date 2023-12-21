@@ -1,4 +1,12 @@
 # ZephC LTE Gateway
+update and backup repo.
+
+## Quick access
+- [GPIO infomations](#status-port)<br>
+- [Communications port](#communications-port)<br>
+- [Data frame](#rs485-data-frame)<br>
+- [Waveform](#waveform)<br>
+
 
 ### Processor
 - STM32F411EC (ARM Cortex M4)
@@ -8,6 +16,9 @@
 
 ### Software
 - STM32CubeUDE
+
+### Debuger/Programmer
+- STlink *(require)*
 
 ### Status port
 | Pin name | Pin descriptins | Port | Pin | Mode |
@@ -95,3 +106,8 @@ B,,,,,,,,,,,,
 15 | Sensor_n_AIR FLOW |
 
 *n = A,B,C,D,E,...*  
+
+
+## Waveform
+![waveform1](.\img\waveform\waveform1.png)
+<br>timing diagram receive data from RS485<br>

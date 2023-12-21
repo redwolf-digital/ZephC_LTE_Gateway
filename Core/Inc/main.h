@@ -19,7 +19,6 @@ extern "C" {
 #define BUSY 					GPIO_PIN_5
 #define ONLINE					GPIO_PIN_6
 #define RDY						GPIO_PIN_7
-#define RTS						GPIO_PIN_8
 #define ERROR					GPIO_PIN_9
 
 
@@ -48,6 +47,19 @@ typedef struct {
 }GNSS_HandleTypeDef;
 
 
+typedef struct {
+	char dateStamp[8];
+	char timeStemp[8];
+	char ID[1];
+	char X[6];
+	char Y[6];
+	char Z[6];
+	char Huim[6];
+	char Temp[6];
+	char Alc[6];
+	char Carbon[6];
+	char AirFlow[6];
+}Sensor_HandleTypeDef;
 
 
 
@@ -55,26 +67,34 @@ typedef struct {
 
 
 
+extern SysTimer_HandleTypeDef sysCounter;
+extern SysFlag_HandleTypeDef sysFlag;
+extern GNSS_HandleTypeDef GNSS;
+extern Sensor_HandleTypeDef SENSOR;
 
 
+extern char Rx1Buff[Rx1Buff_Size];
+extern char Rx2Buff[Rx2Buff_Size];
+extern char dataComm_mainBuff[dataComm_MainBuff_S];
+extern char lteComm_MainBuff[lteComm_MainBuff_S];
 
 
+extern void SendData(char *msg);
+extern void SendCMD_LTE(char *msg);
+extern void SerialDebug(char *msgDebug);
 
-void SerialDebug(char *msgDebug);
+
+extern int findTarget(const char *inStr, const char *target);
+
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
-void SendData(char *msg);
-void SendCMD_LTE(char *msg);
 
 void sysValinit(void);
 
-int findTarget(const char *inStr, const char *target);
-void initLTE(void);
-int networkRegStatus(void);
-int RebootLTE(void);
 
 
-void clearText_buff(void);
-void clearLTE_buff(void);
+
+
 
 
 void Error_Handler(void);
