@@ -55,6 +55,7 @@ static void MX_TIM4_Init(void);
 int main(void) {
 
   sysValinit();
+  sensorValInit();
 
   HAL_Init();
   SystemClock_Config();
@@ -84,18 +85,6 @@ int main(void) {
   initEXIT();
 
 
-  /*
-   *			MAIN CODE
-   * */
-
-  // Wait LTE module boot
-  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
-  HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
-  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
-  SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
-
-  while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
-  initLTE();											// Start init LTE module
 //
 //
 //  // Wait network register
@@ -135,94 +124,86 @@ int main(void) {
  *  ===============================================================================
  */
 
-  while(1) {
-
-	  // =====================================================================================
-	  // CODE UNDER TEST !!!!!!!!
-
-	  // if LTE ERROR
-//	  while(sysFlag.LTE_ERROR == 1) {
-//		  if(sysCounter.main_ms_counter == 0) {
-//			  sysCounter.prev_ERRORtime = 0;
-//		  }
+  // Wait LTE module boot
+//	HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
+//	HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
+//	while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
+//	SerialDebug("[MCU] -> Wait system boot 30sec.\r\n");
 //
-//
-//		  while((sysCounter.main_ms_counter - sysCounter.prev_ERRORtime) >= 500) {
-//			  HAL_GPIO_TogglePin(GPIOB, ERROR);
-//			  sysCounter.rebootCount++;
-//
-//			  // restart after 10 sec. -> 20 tick.
-//			  if(sysCounter.rebootCount == 20) {
-//				  sysCounter.rebootCount = 0;
-//				  RebootLTE();
-//				  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
-//				  goto INIT_LTE;
-//			  }
-//
-//			  sysCounter.prev_ERRORtime = sysCounter.main_ms_counter;
-//		  }
-//	  }
-//
-//
-//	  // Ping every 5 min. for test internet is working
-//
-//	  // Call GNSS
-//	  while(callGNSS((unsigned char *)lteComm_MainBuff) == 1) {
-//		sprintf(textBuffer, "lat = %s \t lon = %s\r\n", latTemp, lonTemp);
-//		SerialDebug(textBuffer);
-//		clearText_buff();
-//	  }
-
-	 // =====================================================================================
+//	while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
+//	initLTE();											// Start init LTE module
 
 
-	  // =====================================================================================
-	  // CODE UNDER TEST EXINT'
+	while(1) {
 
-	  while(intterruptEvent_Flag == 1) {
-		  SerialDebug("[MCU] -> GET RTS\r\n");
-		  memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));		// Clear buffer
-		  // Generate pulse 5ms.
-		  SerialDebug("[MCU] -> SEND RDY\r\n");
-		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
-		  HAL_Delay(5);
-		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
 
-		  // Process data
-		  SerialDebug("[MCU] -> WAIT DATA\r\n");
-		  while(dataComm_mainBuff != 0x00);									// Wait DMA put data from UART to buffer
-		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);						// BUSY !!!!
-		  // Process data
-		  char REQNODE[1];
-		  char ENDBYTE[1];
-		  char COMPID[1];
-		  Delimiter(dataComm_mainBuff, ',', 0, 80, (unsigned char *)REQNODE);
-		  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)COMPID);
-		  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char *)ENDBYTE);
+	RS485Handle :
+	while(intterruptEvent_Flag == 1) {									// Get RTS Signal
+	  SerialDebug("[MCU] -> GET RTS\r\n");
+	  sensorValInit();													// Clear buffer
+	  memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));		// Clear buffer
+	  // Generate pulse 5ms.
+	  SerialDebug("[MCU] -> SEND RDY\r\n");
+	  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+	  HAL_Delay(5);
+	  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
 
-		  if(REQNODE[1] == COMPID[1] && ENDBYTE[1] == 'Q') {
-			  SerialDebug("[MCU] -> RS485 data is valid\r\n");
+	  // Process data
+	  SerialDebug("[MCU] -> WAIT DATA\r\n");
+	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
 
-			  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char *)SENSOR.timeStemp);
-			  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char *)SENSOR.dateStamp);
-			  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)SENSOR.ID);
-			  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char *)SENSOR.X);
-			  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char *)SENSOR.Y);
-			  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char *)SENSOR.Z);
-			  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char *)SENSOR.Huim);
-			  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char *)SENSOR.Temp);
-			  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char *)SENSOR.Alc);
-			  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char *)SENSOR.Carbon);
-			  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char *)SENSOR.AirFlow);
-		  }else {
-			  SerialDebug("[MCU] -> RS485 data is not valid\r\n");
+
+	  while(dataComm_mainBuff == '\0'){									// Wait DMA put data from UART to buffer
+		  // Timeout 5 sec.
+		  if(sysCounter.main_ms_counter == 0) {
+			  sysCounter.prev_msgTimeOut = 0;
 		  }
-
-		  SerialDebug("[MCU] -> End data process\r\n");
-		  intterruptEvent_Flag = 0;
-		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);						// End process
+		  if((sysCounter.main_ms_counter - sysCounter.prev_msgTimeOut) >= msgTimeOut) {
+			  SerialDebug("[RS485] -> TIME OUT\r\n");
+			  SendData_RS485((char *)0x02);								// Send response code 0x02 -> ERROR
+			  intterruptEvent_Flag = 0;
+			  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+			  goto RS485Handle;
+		  }
 	  }
-	  // =====================================================================================
+	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+
+
+	  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);						// BUSY !!!!
+	  // Process data
+	  char REQNODE[1];
+	  char ENDBYTE[1];
+	  char COMPID[1];
+	  Delimiter(dataComm_mainBuff, ',', 0, 80, (unsigned char *)REQNODE);
+	  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)COMPID);
+	  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char *)ENDBYTE);
+
+	  if(REQNODE[1] == COMPID[1] && ENDBYTE[1] == 'Q') {
+		  SerialDebug("[MCU] -> RS485 data is valid\r\n");
+
+		  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char *)SENSOR.timeStemp);
+		  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char *)SENSOR.dateStamp);
+		  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char *)SENSOR.ID);
+		  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char *)SENSOR.X);
+		  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char *)SENSOR.Y);
+		  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char *)SENSOR.Z);
+		  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char *)SENSOR.Huim);
+		  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char *)SENSOR.Temp);
+		  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char *)SENSOR.Alc);
+		  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char *)SENSOR.Carbon);
+		  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char *)SENSOR.AirFlow);
+
+		  SendData_RS485((char *)0x01);									// Send response code 0x01 -> DONE
+	  }else {
+		  SerialDebug("[MCU] -> RS485 data is not valid\r\n");
+		  SendData_RS485((char *)0x02);									// Send response code 0x02 -> ERROR
+	  }
+
+	  SerialDebug("[MCU] -> End data process\r\n");
+	  intterruptEvent_Flag = 0;
+	  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);					// End process
+	}
+	// =====================================================================================
 
 
 
@@ -255,15 +236,34 @@ void sysValinit(void) {
 }
 
 
+// init sensor variable handle
+// set/clear buffer array
+void sensorValInit(void) {
+	SENSOR.dateStamp[0] = '\0';
+	SENSOR.dateStamp[0] = '\0';
+	SENSOR.ID[0] = '\0';
+	SENSOR.X[0] = '\0';
+	SENSOR.Y[0] = '\0';
+	SENSOR.Z[0] = '\0';
+	SENSOR.Huim[0] = '\0';
+	SENSOR.Temp[0] = '\0';
+	SENSOR.Alc[0] = '\0';
+	SENSOR.Carbon[0] = '\0';
+	SENSOR.AirFlow[0] = '\0';
+}
+
+
 // Send text via USB VCOM port
 void SerialDebug(char *msgDebug) {
 	while(CDC_Transmit_FS((uint8_t *) msgDebug, strlen(msgDebug)) != USBD_OK);
 }
 
 
-// UART Tx [Polling method]
-void SendData(char *msg) {
+// RS485 Tx [Polling method]
+void SendData_RS485(char *msg) {
+	HAL_GPIO_WritePin(GPIOA, RS485_TxMode, GPIO_PIN_SET);
 	HAL_UART_Transmit(&huart1, (uint8_t *) msg, strlen(msg), 10);
+	HAL_GPIO_WritePin(GPIOA, RS485_TxMode, GPIO_PIN_RESET);
 }
 
 void SendCMD_LTE(char *msg) {
@@ -271,7 +271,7 @@ void SendCMD_LTE(char *msg) {
 }
 
 
-// UART Rx used DMA
+// UART1/UART2 Rx used DMA
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 	// For LTE module
 	if(huart -> Instance == USART2) {
@@ -295,47 +295,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 }
 
 
+
+
 // Timer4 call back
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if(htim -> Instance == TIM4) {
 		sysCounter.main_ms_counter++;
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
- * @brief find string if match it return
- * @retval 0 - Not found
- * @retval 1 - found
- */
-int findTarget(const char *inStr, const char *target) {
-    int i, j;
-    for (i = 0; inStr[i] != '\0'; i++) {
-        j = 0;
-        while (target[j] != '\0' && inStr[i + j] == target[j]) {
-            j++;
-        }
-        if (target[j] == '\0') {
-            return 1; // Return 1 if found
-        }
-    }
-    return 0; // Return 0 if not found
-}
-
-
-
 
 
 
@@ -545,6 +512,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
                           |GPIO_PIN_9, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+
   /*Configure GPIO pins : PB1 PB5 PB6 PB7
                            PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
@@ -553,6 +523,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 

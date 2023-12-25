@@ -22,7 +22,7 @@ update and backup repo.
 
 ### Status port
 | Pin name | Pin descriptins | Port | Pin | Mode |
-| :-- | :-- | :-: | :-- | :--
+| :-- | :-- | :-: | :-- | :-- |
 Debug | general purpose output port for test <br> *normally not used* | B | 1 | OUTPUT |
 BUSY | for tell other device now gateway is busy | B | 5 | OUTPUT |
 ONLINE | for tell other device now gateway is online or offline | B | 6 | OUTPUT |
@@ -30,6 +30,10 @@ RDY | for tell other device now gateway is ready to receive data | B | 7 | OUTPU
 RTS | for tell gateway wait to receive data | B | 3 | INPUT *Interrupt* |
 ERROR | if system have error | B | 9 | OUTPUT |
 
+### I/O port
+| Pin name | Pin descriptins | Port | Pin | Mode |
+| :-- | :-- | :-: | :-- | :-- |
+RS485_Tx_En | RS485 enable transmit mode | A | 8 | OUTPUT |
 
 ### Communications port
 ***UART1*** - used for communicate between **gateway and master** via UART to ***RS485***

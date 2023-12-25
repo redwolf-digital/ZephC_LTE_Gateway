@@ -8,18 +8,22 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 
 
-#define Rx1Buff_Size			255
+#define Rx1Buff_Size			128
 #define Rx2Buff_Size			255
-#define dataComm_MainBuff_S		255
+
+#define dataComm_MainBuff_S		128
 #define lteComm_MainBuff_S		255
 
 #define LTEbootTime				30000
+#define msgTimeOut				5000
 
 //GPIO
 #define BUSY 					GPIO_PIN_5
 #define ONLINE					GPIO_PIN_6
 #define RDY						GPIO_PIN_7
 #define ERROR					GPIO_PIN_9
+
+#define RS485_TxMode			GPIO_PIN_8
 
 
 
@@ -28,6 +32,7 @@ typedef struct {
 	uint16_t main_ms_counter;
 	uint16_t prev_LTEtimeout;
 	uint16_t prev_ERRORtime;
+	uint16_t prev_msgTimeOut;
 
 	uint8_t rebootCount;
 
@@ -79,7 +84,7 @@ extern char dataComm_mainBuff[dataComm_MainBuff_S];
 extern char lteComm_MainBuff[lteComm_MainBuff_S];
 
 
-extern void SendData(char *msg);
+extern void SendData_RS485(char *msg);
 extern void SendCMD_LTE(char *msg);
 extern void SerialDebug(char *msgDebug);
 
@@ -90,6 +95,7 @@ extern int findTarget(const char *inStr, const char *target);
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 
 void sysValinit(void);
+void sensorValInit(void);
 
 
 
