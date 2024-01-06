@@ -1,2 +1,2 @@
-../Core/Src/msgProcess.c:27:6:Delimiter	48	static
-../Core/Src/msgProcess.c:69:15:NMEACRCCal	48	static
+../Core/Src/msgProcess.c:57:6:Delimiter	48	static
+../Core/Src/msgProcess.c:138:15:NMEACRCCal	48	static

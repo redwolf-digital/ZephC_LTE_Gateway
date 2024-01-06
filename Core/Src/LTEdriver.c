@@ -116,6 +116,102 @@ void initLTE(void) {
 }
 
 
+// init PDP context
+void initPDP(uint8_t contextID) {
+	SerialDebug("[MCU] -> start initialize PDP context\r\n");
+
+	for(unsigned char countSeq = 0; countSeq < 4; countSeq++) {
+
+		switch(countSeq) {
+			case 0 :	// Query SIM card
+				sprintf(TextTemp, "AT+CPIN?\r\n");
+				break;
+			case 1 :	// Configure Parameters of a TCP/IP Context
+				sprintf(TextTemp, "AT+QICSGP=1,1,\"internet\",\"true\",\"true\",1\r\n");
+				break;
+			case 2 :	// Activate a PDP Context
+				sprintf(TextTemp, "AT+QIACT=%d\r\n", contextID);
+				break;
+			case 3 :	// Query active status
+				sprintf(TextTemp, "AT+QIACT?\r\n");
+				break;
+
+		}
+
+		SendCMD_LTE((char *)TextTemp);	// Sned CMD
+		sysFlag.LTE_CMD_Send = 1;
+		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+
+		while(sysFlag.LTE_CMD_Send == 1) {
+			// OK conditions
+			if(findTarget(lteComm_MainBuff, "OK") == 1) {
+				SerialDebug("[LTE] -> OK\r\n");
+
+				// (U)SIM Status if not READY
+				if(countSeq == 0 && findTarget(lteComm_MainBuff, "READY") != 1) {
+					SerialDebug("[LTE] -> ");
+					SerialDebug((char *)lteComm_MainBuff);
+				}
+				// Dump query informations
+				else if(countSeq == 3) {
+					SerialDebug("[LTE] -> ");
+					SerialDebug((char *)lteComm_MainBuff);
+				}
+
+				sysFlag.LTE_CMD_Send = 0;
+				clearLTE_Temp();
+				clearText_Temp();
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+			}
+
+			// Error conditions
+			else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
+				SerialDebug("[LTE] -> ");
+				SerialDebug((char *)lteComm_MainBuff);
+				sysFlag.LTE_ERROR = 1;
+				sysFlag.LTE_CMD_Send = 0;
+				clearLTE_Temp();
+				clearText_Temp();
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+			}
+
+			// Timeout Conditions
+			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
+				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
+				sysFlag.LTE_ERROR = 1;
+				sysFlag.LTE_CMD_Send = 0;
+				clearLTE_Temp();
+				clearText_Temp();
+				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
+			}
+		}
+	}
+}
+
+
+// Deactivate PDP context
+void deactivatePDP(uint8_t contextID) {
+	SerialDebug("[LTE] -> deactivate PDP\r\n");
+	sprintf(TextTemp, "AT+QIDEACT=%d\r\n", contextID);
+	SendCMD_LTE((char *)TextTemp);
+	sysFlag.LTE_CMD_Send = 1;
+
+	while(sysFlag.LTE_CMD_Send == 1){
+		if(findTarget(lteComm_MainBuff, "OK") == 1) {
+			SerialDebug("[LTE] -> OK\r\n");
+			sysFlag.LTE_CMD_Send = 0;
+		}else {
+			SerialDebug("[LTE] -> ");
+			SerialDebug((char *)lteComm_MainBuff);
+			sysFlag.LTE_ERROR = 1;
+			sysFlag.LTE_CMD_Send = 0;
+		}
+	}
+	clearLTE_Temp();
+	clearText_Temp();
+}
+
+
 // Network register status
 unsigned char networkRegStatus(void) {
 	SendCMD_LTE("AT+CREG?\r\n");

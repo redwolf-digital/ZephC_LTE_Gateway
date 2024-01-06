@@ -55,7 +55,6 @@ typedef struct {
 typedef struct {
 	char dateStamp[8];
 	char timeStemp[8];
-	char ID[1];
 	char X[6];
 	char Y[6];
 	char Z[6];
@@ -65,6 +64,8 @@ typedef struct {
 	char Carbon[6];
 	char AirFlow[6];
 }Sensor_HandleTypeDef;
+
+
 
 
 
