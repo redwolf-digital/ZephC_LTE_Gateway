@@ -89,6 +89,9 @@ int main(void) {
   initEXIT();
 
 
+  //initLTE();
+
+
 
 
 
@@ -125,12 +128,12 @@ int main(void) {
   while(1) {
   // ErrorHandle
 
-  // RS485Handle :
+  RS485Handle :
 	while(intterruptEvent_Flag == 1) {									// Get RTS Signal
 	  SerialDebug("[MCU] -> Get RTS\r\n");
 	  sensorValInit();													// Clear buffer
-	  COMPID[1] = '\0';
-	  ENDBYTE[1] = '\0';
+	  memset(COMPID, 0x00, sizeof(COMPID));
+	  memset(ENDBYTE, 0x00, sizeof(ENDBYTE));
 
 	  // Ping to server
 
@@ -146,40 +149,53 @@ int main(void) {
 	  SerialDebug("[MCU] -> Wait data\r\n");
 
 	  // Wait DMA put data to buffer
+	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
 	  while(*dataComm_mainBuff == '\0') {
 		  // Timeout conditions
+		  if(sysCounter.main_ms_counter == 0) {
+			  sysCounter.prev_msgTimeOut = 0;
+		  }
 
+		  if((sysCounter.main_ms_counter - sysCounter.prev_msgTimeOut) >= 1000) {
+			  SerialDebug("[RS485] -> Timeout\r\n");
+			  SendData_RS485((char*) 'F');
+			  intterruptEvent_Flag = 0;
+			  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
+			  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+			  goto RS485Handle;
+		  }
 	  }
-
-	  Delimiter(dataComm_mainBuff, ',', 3, 80, COMPID[1]);
-	  Delimiter(dataComm_mainBuff, ',', 12, 80, ENDBYTE[1]);
+	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
 
 	  // Check data is valid?
 	  // frame 0 = frame 3 && frame 12 = 'Q'
-	  if(dataComm_mainBuff[0] == COMPID[1] && ENDBYTE[1] == 'Q') {
+	  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char*) COMPID);
+	  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char*) ENDBYTE);
+
+	  if(dataComm_mainBuff[0] == COMPID[0] && ENDBYTE[0] == 'Q') {
 		  SerialDebug("[MCU] -> Data is valid\r\n");
 
 		  // Delimit data
-		  Delimiter(dataComm_mainBuff, ',', 1, 80, SENSOR.timeStemp);
-		  Delimiter(dataComm_mainBuff, ',', 2, 80, SENSOR.dateStamp);
-		  Delimiter(dataComm_mainBuff, ',', 4, 80, SENSOR.X);
-		  Delimiter(dataComm_mainBuff, ',', 5, 80, SENSOR.Y);
-		  Delimiter(dataComm_mainBuff, ',', 6, 80, SENSOR.Z);
-		  Delimiter(dataComm_mainBuff, ',', 7, 80, SENSOR.Huim);
-		  Delimiter(dataComm_mainBuff, ',', 8, 80, SENSOR.Temp);
-		  Delimiter(dataComm_mainBuff, ',', 9, 80, SENSOR.Alc);
-		  Delimiter(dataComm_mainBuff, ',', 10, 80, SENSOR.Carbon);
-		  Delimiter(dataComm_mainBuff, ',', 11, 80, SENSOR.AirFlow);
+		  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char*) SENSOR.timeStemp);
+		  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char*) SENSOR.dateStamp);
+		  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char*) SENSOR.X);
+		  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char*) SENSOR.Y);
+		  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char*) SENSOR.Z);
+		  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char*) SENSOR.Huim);
+		  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char*) SENSOR.Temp);
+		  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char*) SENSOR.Alc);
+		  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char*) SENSOR.Carbon);
+		  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char*) SENSOR.AirFlow);
 
 		  // Send data to server
 		  	  // code here but not now
 
 		  // Send response Code
-		  SendData_RS485('P');
+		  SendData_RS485((char*) 'P');
 
 	  }else {
 		  SerialDebug("[MCU] -> Data is not valid\r\n");
-		  SendData_RS485('F');
+		  SendData_RS485((char*) 'F');
 	  }
 
 	  // End data process

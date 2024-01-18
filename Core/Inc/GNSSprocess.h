@@ -8,9 +8,9 @@
 #ifndef INC_GNSSPROCESS_H_
 #define INC_GNSSPROCESS_H_
 
-extern unsigned char latTemp[10];
-extern unsigned char lonTemp[10];
+extern unsigned char latTemp[16];
+extern unsigned char lonTemp[16];
 
-int callGNSS(const unsigned char* GNSSin);
+unsigned char callGNSS(void);
 
 #endif /* INC_GNSSPROCESS_H_ */

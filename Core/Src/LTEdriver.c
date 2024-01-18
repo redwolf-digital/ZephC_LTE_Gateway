@@ -33,40 +33,37 @@ void clearLTE_Temp(void) {
 void initLTE(void) {
 	SerialDebug("[MCU] -> start initialize LTE module\r\n");
 
-	for(unsigned char countSeq = 0; countSeq < 8; countSeq++) {
+	for(unsigned char countSeq = 0; countSeq < 7; countSeq++) {
 
 		switch(countSeq) {
 			case 0 :	// Turn off echo
 				sprintf(TextTemp, "ATE0\r\n");
 				break;
 
-			case 1 :	// Low -> High on DTR: Change to command mode while remaining the connected call
+			case 1 :
 				sprintf(TextTemp, "AT&D1\r\n");
 				break;
 
-			case 2 :	// Set frequency band
-				sprintf(TextTemp, "AT+QCFG=\"Band\",511,1\r\n");
-				break;
-
-			case 3 :	// Disable GNSS
+			case 2 :
 				sprintf(TextTemp, "AT+QGPSEND\r\n");
 				break;
 
-			case 4 :	// Output via debug UART port
-				sprintf(TextTemp, "AT+QGPSCFG=\"outport\",\"uartdebug\"\r\n");
+			case 3 :
+				sprintf(TextTemp, "AT+QGPSCFG=\"outport\",\"none\"\r\n");
 				break;
 
-			case 5 :	// Enable NMEA
+			case 4 :
 				sprintf(TextTemp, "AT+QGPSCFG=\"nmeasrc\",1\r\n");
 				break;
 
-			case 6 :	// NMEA type output GPRMC only
+			case 5 :
 				sprintf(TextTemp, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n");
 				break;
 
-			case 7 :	// Set status network registration
-				sprintf(TextTemp, "AT+CREG=1\r\n");
+			case 6 :
+				sprintf(TextTemp, "AT+QGPS\r\n");
 				break;
+
 		}
 
 		SendCMD_LTE((char *)TextTemp);	// Sned CMD
@@ -74,6 +71,7 @@ void initLTE(void) {
 		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 
 		while(sysFlag.LTE_CMD_Send == 1) {
+
 			// OK conditions
 			if(findTarget(lteComm_MainBuff, "OK") == 1) {
 				SerialDebug("[LTE] -> OK\r\n");
@@ -90,7 +88,7 @@ void initLTE(void) {
 				SerialDebug((char *)lteComm_MainBuff);
 
 				// Case 3 : Disable GNSS fail -> ignore error 505
-				if(countSeq == 3 && findTarget(lteComm_MainBuff, "505") == 1) {
+				if(countSeq == 2 && findTarget(lteComm_MainBuff, "505") == 1) {
 					sysFlag.LTE_ERROR = 0;
 				}else {
 					sysFlag.LTE_ERROR = 1;
@@ -116,114 +114,6 @@ void initLTE(void) {
 }
 
 
-// init PDP context
-void initPDP(uint8_t contextID) {
-	SerialDebug("[MCU] -> start initialize PDP context\r\n");
-
-	for(unsigned char countSeq = 0; countSeq < 4; countSeq++) {
-
-		switch(countSeq) {
-			case 0 :	// Query SIM card
-				sprintf(TextTemp, "AT+CPIN?\r\n");
-				break;
-			case 1 :	// Configure Parameters of a TCP/IP Context
-				sprintf(TextTemp, "AT+QICSGP=1,1,\"internet\",\"true\",\"true\",1\r\n");
-				break;
-			case 2 :	// Activate a PDP Context
-				sprintf(TextTemp, "AT+QIACT=%d\r\n", contextID);
-				break;
-			case 3 :	// Query active status
-				sprintf(TextTemp, "AT+QIACT?\r\n");
-				break;
-
-		}
-
-		SendCMD_LTE((char *)TextTemp);	// Sned CMD
-		sysFlag.LTE_CMD_Send = 1;
-		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-
-		while(sysFlag.LTE_CMD_Send == 1) {
-			// OK conditions
-			if(findTarget(lteComm_MainBuff, "OK") == 1) {
-				SerialDebug("[LTE] -> OK\r\n");
-
-				// (U)SIM Status if not READY
-				if(countSeq == 0 && findTarget(lteComm_MainBuff, "READY") != 1) {
-					SerialDebug("[LTE] -> ");
-					SerialDebug((char *)lteComm_MainBuff);
-				}
-				// Dump query informations
-				else if(countSeq == 3) {
-					SerialDebug("[LTE] -> ");
-					SerialDebug((char *)lteComm_MainBuff);
-				}
-
-				sysFlag.LTE_CMD_Send = 0;
-				clearLTE_Temp();
-				clearText_Temp();
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-			}
-
-			// Error conditions
-			else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
-				SerialDebug("[LTE] -> ");
-				SerialDebug((char *)lteComm_MainBuff);
-				sysFlag.LTE_ERROR = 1;
-				sysFlag.LTE_CMD_Send = 0;
-				clearLTE_Temp();
-				clearText_Temp();
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-			}
-
-			// Timeout Conditions
-			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
-				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
-				sysFlag.LTE_ERROR = 1;
-				sysFlag.LTE_CMD_Send = 0;
-				clearLTE_Temp();
-				clearText_Temp();
-				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
-			}
-		}
-	}
-}
-
-
-// Deactivate PDP context
-void deactivatePDP(uint8_t contextID) {
-	SerialDebug("[LTE] -> deactivate PDP\r\n");
-	sprintf(TextTemp, "AT+QIDEACT=%d\r\n", contextID);
-	SendCMD_LTE((char *)TextTemp);
-	sysFlag.LTE_CMD_Send = 1;
-
-	while(sysFlag.LTE_CMD_Send == 1){
-		if(findTarget(lteComm_MainBuff, "OK") == 1) {
-			SerialDebug("[LTE] -> OK\r\n");
-			sysFlag.LTE_CMD_Send = 0;
-		}else {
-			SerialDebug("[LTE] -> ");
-			SerialDebug((char *)lteComm_MainBuff);
-			sysFlag.LTE_ERROR = 1;
-			sysFlag.LTE_CMD_Send = 0;
-		}
-	}
-	clearLTE_Temp();
-	clearText_Temp();
-}
-
-
-// Network register status
-unsigned char networkRegStatus(void) {
-	SendCMD_LTE("AT+CREG?\r\n");
-
-	if(findTarget(lteComm_MainBuff, "+CREG: 1") == 1) {
-		clearLTE_Temp();
-		return 1;
-	}else {
-		clearLTE_Temp();
-		return 0;
-	}
-}
 
 
 // Shutdown

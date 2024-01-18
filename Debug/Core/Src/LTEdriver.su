@@ -1,7 +1,4 @@
 ../Core/Src/LTEdriver.c:20:6:clearText_Temp	8	static
 ../Core/Src/LTEdriver.c:24:6:clearLTE_Temp	8	static
 ../Core/Src/LTEdriver.c:33:6:initLTE	16	static
-../Core/Src/LTEdriver.c:120:6:initPDP	24	static
-../Core/Src/LTEdriver.c:193:6:deactivatePDP	16	static
-../Core/Src/LTEdriver.c:216:15:networkRegStatus	8	static
-../Core/Src/LTEdriver.c:236:15:SHUTDOWN_LTE	8	static
+../Core/Src/LTEdriver.c:126:15:SHUTDOWN_LTE	8	static

@@ -1,6 +1,7 @@
 "./Core/Src/EXITinti.o"
 "./Core/Src/GNSSprocess.o"
 "./Core/Src/LTEdriver.o"
+"./Core/Src/initernet.o"
 "./Core/Src/main.o"
 "./Core/Src/msgProcess.o"
 "./Core/Src/stm32f4xx_hal_msp.o"

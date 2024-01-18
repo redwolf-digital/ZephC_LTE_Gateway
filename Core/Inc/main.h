@@ -27,7 +27,6 @@ extern "C" {
 
 
 
-
 typedef struct {
 	uint16_t main_ms_counter;
 	uint16_t prev_LTEtimeout;

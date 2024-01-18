@@ -11,28 +11,33 @@
 
 
 char* status;
-unsigned char latTemp[10];
-unsigned char lonTemp[10];
+unsigned char latTemp[16];
+unsigned char lonTemp[16];
+
+unsigned char processFlag = 0;
+unsigned char returnValue;
 
 
-/*
- * Return	0 - FAIL
- * 			1 - PASS
- */
-int callGNSS(const unsigned char* GNSSin) {
-	while(NMEACRCCal(GNSSin) == 1) {
+// Get GPS data
+// return 1 if process is done
+// return 2 if NMEA CRC is fail
+unsigned char callGNSS(void) {
+	SendCMD_LTE("AT+QGPSCFG=\"outport\",\"uartdebug\"\r\n");
 
+	while(findTarget(lteComm_MainBuff, "OK") != 0);
+	HAL_Delay(2);
 
-		Delimiter((char *)GNSSin, ',', 2, 80, (unsigned char *)status);
-		if(*status == 'A') {
+	processFlag = NMEACRCCal((unsigned char *) lteComm_MainBuff);
 
-			Delimiter((char *)GNSSin, ',', 3, 80, latTemp); // lat
-			Delimiter((char *)GNSSin, ',', 5, 80, lonTemp); // lon
-
-			return 1;
-		}else {
-			return 0;
-		}
+	if(processFlag == 1) {
+		Delimiter(lteComm_MainBuff, ',', 3, 80, latTemp);
+		Delimiter(lteComm_MainBuff, ',', 5, 80, lonTemp);
+		returnValue = 1;
+	}else {
+		returnValue = 2;
 	}
-	return 0;
+
+	SendCMD_LTE("AT+QGPSCFG=\"outport\",\"none\"\r\n");
+	while(findTarget(lteComm_MainBuff, "OK") != 0);
+	return returnValue;
 }
