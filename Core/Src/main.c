@@ -15,12 +15,14 @@
 #include "GNSSprocess.h"
 #include "EXITinti.h"
 #include "LTEdriver.h"
+#include "initernet.h"
 
 
 
 
 
-char textBuffer[125];
+char textBuffer[128];
+char URL_temp[350];
 
 
 char Rx1Buff[Rx1Buff_Size];
@@ -28,9 +30,18 @@ char Rx2Buff[Rx2Buff_Size];
 char dataComm_mainBuff[dataComm_MainBuff_S];
 char lteComm_MainBuff[lteComm_MainBuff_S];
 
+unsigned int URL_len;
+unsigned char sendURL_flag = 0;
+
+
 
 char ENDBYTE[1];
-char COMPID[1];
+
+
+// internal flag
+uint8_t AckInternet_ErrCode = 0;
+uint8_t AckInternet_flag = 0;
+uint8_t reboot_min_count = 0;
 
 
 
@@ -77,23 +88,16 @@ int main(void) {
 
   // DMA LTE
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)Rx2Buff, Rx2Buff_Size);
-  __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+  //__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
 
   //DMA commMaster
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)Rx1Buff, Rx1Buff_Size);
-  __HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
+  //__HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
 
 
 
   // INTERRUPT
   initEXIT();
-
-
-  //initLTE();
-
-
-
-
 
 
 /*
@@ -108,101 +112,226 @@ int main(void) {
  */
 
   // Wait LTE module boot
-  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY 1
+  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY -> 1
   HAL_GPIO_WritePin(GPIOB, ONLINE, GPIO_PIN_RESET);		// ONLINE 0
   while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
   // Initialize LTE module
   SerialDebug("[MCU] -> Wait LTE boot 30sec.\r\n");
   while(sysCounter.main_ms_counter < LTEbootTime);		// Wait LTE module boot
-  initLTE();											// Start init LTE module
-  // Config PDP context
-  //initPDP(1);
-
-  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY 0
 
 
 
+  // Start init LTE module
+  initLTE();
+  AckInternet_ErrCode = AckInternet();
 
+
+
+  AckInternet_flag = 1;
+
+  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY -> 0
+  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
 
 
   while(1) {
-  // ErrorHandle
+	  // ErrorHandle
+	  //Init error please check system
+	  while(sysFlag.LTE_INIT_ERROR == 1) {
+		  HAL_GPIO_TogglePin(GPIOB, ERROR);
+		  HAL_Delay(250);
+	  }
 
-  RS485Handle :
-	while(intterruptEvent_Flag == 1) {									// Get RTS Signal
-	  SerialDebug("[MCU] -> Get RTS\r\n");
-	  sensorValInit();													// Clear buffer
-	  memset(COMPID, 0x00, sizeof(COMPID));
-	  memset(ENDBYTE, 0x00, sizeof(ENDBYTE));
-
-	  // Ping to server
-
-
-
-	  // Generate pulse 5ms.
-	  SerialDebug("[MCU] -> Send RDY\r\n");
-	  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
-	  HAL_Delay(5);
-	  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
-
-	  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);						// BUSY !!!!
-	  SerialDebug("[MCU] -> Wait data\r\n");
-
-	  // Wait DMA put data to buffer
-	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
-	  while(*dataComm_mainBuff == '\0') {
-		  // Timeout conditions
+	  while(sysFlag.LTE_ERROR == 1) {
 		  if(sysCounter.main_ms_counter == 0) {
-			  sysCounter.prev_msgTimeOut = 0;
+			  sysCounter.rebootCount = 0;
 		  }
-
-		  if((sysCounter.main_ms_counter - sysCounter.prev_msgTimeOut) >= 1000) {
-			  SerialDebug("[RS485] -> Timeout\r\n");
-			  SendData_RS485((char*) 'F');
-			  intterruptEvent_Flag = 0;
-			  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
-			  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
-			  goto RS485Handle;
+		  if((sysCounter.main_ms_counter - sysCounter.rebootCount) >= 60000) {
+			  reboot_min_count++;
+			  sysCounter.rebootCount = sysCounter.main_ms_counter;
+		  }
+		  while(reboot_min_count >= 10) {
+			  if(SHUTDOWN_LTE() == 1) {
+				  HAL_Delay(50);
+				  HAL_NVIC_SystemReset();
+			  }else {
+				  sysFlag.LTE_ERROR = 0;
+				  sysFlag.LTE_INIT_ERROR = 1;
+				  sysCounter.rebootCount = sysCounter.main_ms_counter;
+			  }
 		  }
 	  }
-	  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
 
-	  // Check data is valid?
-	  // frame 0 = frame 3 && frame 12 = 'Q'
-	  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char*) COMPID);
-	  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char*) ENDBYTE);
 
-	  if(dataComm_mainBuff[0] == COMPID[0] && ENDBYTE[0] == 'Q') {
-		  SerialDebug("[MCU] -> Data is valid\r\n");
+	  // Main task
+	  if(AckInternet_flag == 1) {
 
-		  // Delimit data
-		  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char*) SENSOR.timeStemp);
-		  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char*) SENSOR.dateStamp);
-		  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char*) SENSOR.X);
-		  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char*) SENSOR.Y);
-		  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char*) SENSOR.Z);
-		  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char*) SENSOR.Huim);
-		  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char*) SENSOR.Temp);
-		  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char*) SENSOR.Alc);
-		  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char*) SENSOR.Carbon);
-		  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char*) SENSOR.AirFlow);
+	  RS485Handle :
+		while(intterruptEvent_Flag == 1) {									// Get RTS Signal
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);				    	// BUSY !!!!
+		  SerialDebug("[MCU] -> Get RTS\r\n");
+		  sensorValInit();													// Clear buffer
+		  memset(SENSOR.COMPID, 0x00, sizeof(SENSOR.COMPID));
+		  memset(ENDBYTE, 0x00, sizeof(ENDBYTE));
 
-		  // Send data to server
-		  	  // code here but not now
 
-		  // Send response Code
-		  SendData_RS485((char*) 'P');
+		  // Call GPS
+		  if(callGNSS() == 1) {
+			  SerialDebug((char *) "[MCU] -> CRC pass\r\n");
+			  GNSS.lat[0] = '\0';
+			  GNSS.lon[0] = '\0';
+			  memcpy(GNSS.lat, latTemp, sizeof(GNSS.lat));
+			  memcpy(GNSS.lon, lonTemp, sizeof(GNSS.lon));
+		  }else {
+			  SerialDebug((char *) "[MCU] -> CRC fail\r\n");
+		  }
 
-	  }else {
-		  SerialDebug("[MCU] -> Data is not valid\r\n");
-		  SendData_RS485((char*) 'F');
+
+		  // Generate pulse 5ms.
+
+		  HAL_Delay(10);
+		  SerialDebug("[MCU] -> Send RDY\r\n");
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+		  HAL_Delay(1);
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
+
+		  SerialDebug("[MCU] -> Wait data\r\n");
+
+		  // Wait DMA put data to buffer
+		  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+		  HAL_Delay(5);
+		  while(*dataComm_mainBuff == '\0') {
+			  // Timeout conditions
+			  if(sysCounter.main_ms_counter == 0) {
+				  sysCounter.prev_msgTimeOut = 0;
+			  }
+
+			  if((sysCounter.main_ms_counter - sysCounter.prev_msgTimeOut) >= 1000) {
+				  SerialDebug("[RS485] -> Timeout\r\n");
+				  SendData_RS485((char*) "F");
+				  intterruptEvent_Flag = 0;
+				  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
+				  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+				  goto RS485Handle;
+			  }
+		  }
+		  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+
+		  // Check data is valid?
+		  // frame 0 = frame 3 && frame 12 = 'Q'
+		  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char*) SENSOR.COMPID);
+		  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char*) ENDBYTE);
+
+		  if(dataComm_mainBuff[0] == SENSOR.COMPID[0] && ENDBYTE[0] == 'Q') {
+			  SerialDebug("[MCU] -> Data is valid\r\n");
+
+			  // Delimit data
+			  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char*) SENSOR.timeStemp);
+			  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char*) SENSOR.dateStamp);
+			  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char*) SENSOR.X);
+			  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char*) SENSOR.Y);
+			  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char*) SENSOR.Z);
+			  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char*) SENSOR.Huim);
+			  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char*) SENSOR.Temp);
+			  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char*) SENSOR.Alc);
+			  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char*) SENSOR.Carbon);
+			  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char*) SENSOR.AirFlow);
+
+
+			  // Send data to server
+			  HAL_Delay(1);
+			  memset(URL_temp, 0x00, sizeof(URL_temp));
+			  URL_len = httpSend(GNSS.lat, GNSS.lon, SENSOR.COMPID, SENSOR.timeStemp, SENSOR.dateStamp, SENSOR.X, SENSOR.Y, SENSOR.Z, SENSOR.Huim, SENSOR.Temp, SENSOR.Alc, SENSOR.Carbon, SENSOR.AirFlow, URL_temp);
+
+			  SerialDebug("[URL] -> ");
+			  SerialDebug(URL_temp);
+			  SerialDebug("\r\n");
+
+			  HAL_Delay(10);
+
+			  memset(textBuffer, 0x00, sizeof(textBuffer));
+			  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+
+			  for(unsigned char count = 0; count < 3; count++) {
+				  switch(count) {
+				  	  case 0 :
+				  		  sprintf(textBuffer, "AT+QHTTPURL=%d,80\r\n", URL_len);
+					  	  break;
+
+				  	  case 1 :
+				  		  sprintf(textBuffer, "AT+QHTTPPOST=1,60,60\r\n");
+						  break;
+
+				  	  case 2 :
+				  		  HAL_Delay(3000);
+				  		  sprintf(textBuffer, "AT+QHTTPREAD=80\r\n");
+				  		  break;
+				  }
+
+
+				  SerialDebug((char *) textBuffer);
+				  SerialDebug("\r\n");
+				  SendCMD_LTE((char *) textBuffer);
+				  sendURL_flag = 1;
+
+				  while(sendURL_flag == 1) {
+					  if(findTarget(lteComm_MainBuff, "CONNECT") == 1) {
+						  if(count == 0) {
+							  SendCMD_LTE((char *) URL_temp);
+						  }
+
+						  if(count == 1) {
+							  SendCMD_LTE((char *) "\r");
+						  }
+
+						  if(count == 2) {
+							  SerialDebug((char *) "\n");
+							  SerialDebug((char *) lteComm_MainBuff);
+							  SerialDebug((char *) "\n");
+							  SendData_RS485((char*) "P");
+						  }
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+					  }
+
+					  else if(findTarget(lteComm_MainBuff, "OK") == 1) {
+						  SerialDebug("[LTE] -> OK\r\n");
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+						  sendURL_flag = 0;
+					  }
+
+
+					  else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
+						  SerialDebug("[LTE] -> ERROR\r\n");
+						  SendData_RS485((char*) "X");
+
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+						  sysFlag.LTE_ERROR = 1;
+						  sendURL_flag = 0;
+						  intterruptEvent_Flag = 0;
+					  }
+				  }
+			  }
+		  }else {
+			  SerialDebug("[MCU] -> Data is not valid\r\n");
+			  SendData_RS485((char*) "F");
+		  }
+
+		  // End data process
+		  SerialDebug("[MCU] -> End data process\r\n");
+		  intterruptEvent_Flag = 0;
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
+		}
 	  }
-
-	  // End data process
-	  SerialDebug("[MCU] -> End data process\r\n");
-	  intterruptEvent_Flag = 0;
-	  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
-	}
 	// =====================================================================================
   }
 }
@@ -219,6 +348,7 @@ int main(void) {
 
 // user custom functions
 
+
 // init startup value at boot
 void sysValinit(void) {
 	sysCounter.main_ms_counter = 0;
@@ -229,6 +359,7 @@ void sysValinit(void) {
 	sysCounter.CMDrespTime = 1000;	// 1sec.
 
 	sysFlag.LTE_CMD_Send = 0;
+	sysFlag.LTE_INIT_ERROR = 0;
 	sysFlag.LTE_ERROR = 0;
 }
 
@@ -236,6 +367,7 @@ void sysValinit(void) {
 // init sensor variable handle
 // set/clear buffer array
 void sensorValInit(void) {
+	SENSOR.COMPID[0] = '\0';
 	SENSOR.dateStamp[0] = '\0';
 	SENSOR.dateStamp[0] = '\0';
 	SENSOR.X[0] = '\0';
@@ -257,15 +389,11 @@ void SerialDebug(char *msgDebug) {
 
 // RS485 Tx [Polling method]
 void SendData_RS485(char *msg) {
-	HAL_GPIO_WritePin(GPIOA, RS485_TxMode, GPIO_PIN_SET);
-	HAL_Delay(1);
 	HAL_UART_Transmit(&huart1, (uint8_t *) msg, strlen(msg), 10);
-	HAL_Delay(1);
-	HAL_GPIO_WritePin(GPIOA, RS485_TxMode, GPIO_PIN_RESET);
 }
 
 void SendCMD_LTE(char *msg) {
-	HAL_UART_Transmit(&huart2, (uint8_t *) msg, strlen(msg), 10);
+	HAL_UART_Transmit(&huart2, (uint8_t *) msg, strlen(msg), 64);
 }
 
 
@@ -314,6 +442,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if(htim -> Instance == TIM4) {
 		sysCounter.main_ms_counter++;
 	}
+}
+
+
+// Clear communication buffer
+void Clear_Buff_Commu(void) {
+	memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));
 }
 
 

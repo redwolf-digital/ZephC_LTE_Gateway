@@ -8,8 +8,12 @@
 #ifndef INC_INITERNET_H_
 #define INC_INITERNET_H_
 
-unsigned char initInternet(void);
 void clearText_net_Temp(void);
 
+unsigned char AckInternet(void);
+unsigned int httpSend(char* lat, char* lon, char* device_ID, char* time_s, char* date_s, char* x, char* y, char* z, char* humi, char* temp, char* eth, char* carbon, char* airflow, char* out);
+unsigned char ping(void);
+
+void addZero(char* in, char* out);
 
 #endif /* INC_INITERNET_H_ */

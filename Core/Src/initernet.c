@@ -6,12 +6,31 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "main.h"
 #include "LTEdriver.h"
+#include "msgProcess.h"
+
+#define TOKEN "77690b2d-e66e-454a-9760-b644e40cc7fb"
+
+int temp;
+char time_temp[12];
+char date_temp[12];
+
+char DD[8];
+char MM[8];
+char YY[8];
+
+char hh[8];
+char mm[8];
+char ss[8];
+
 
 char TextNetTemp[125];
+unsigned char Error = 0;	// 0 = No error | > 1 Error
 
+char HTTP_URL_Temp[350];	// URL length max 350 byte
 
 
 void clearText_net_Temp(void) {
@@ -19,13 +38,23 @@ void clearText_net_Temp(void) {
 }
 
 
+// Fix single digit to 2 digit
+void addZero(char* in, char* out) {
+	temp = atoi(in);
+
+    if(temp < 10){
+        sprintf(out, "0%d", temp);
+    }else{
+        out = in;
+    }
+}
 
 
-unsigned char initInternet(void) {
+unsigned char AckInternet(void) {
 
-	SerialDebug("[MCU] -> start initialize LTE module\r\n");
+	SerialDebug("[MCU] -> start active internet conn.\r\n");
 
-	for(unsigned char countSeq = 0; countSeq < 5; countSeq++) {
+	for(unsigned char countSeq = 0; countSeq < 4; countSeq++) {
 		switch(countSeq) {
 			case 0 :
 				sprintf(TextNetTemp, "AT+QICSGP=1,1,\"INTERNET\",\"\",\"\",1\r\n");
@@ -44,7 +73,8 @@ unsigned char initInternet(void) {
 				break;
 		}
 
-		SendCMD_LTE((char *)TextNetTemp);	// Sned CMD
+		SerialDebug((char *) TextNetTemp);
+		SendCMD_LTE((char *) TextNetTemp);	// Sned CMD
 		sysFlag.LTE_CMD_Send = 1;
 		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 
@@ -71,7 +101,7 @@ unsigned char initInternet(void) {
 				SerialDebug("[LTE] -> ");
 				SerialDebug((char *)lteComm_MainBuff);
 
-				sysFlag.LTE_ERROR = 1;
+				Error++;
 
 				sysFlag.LTE_CMD_Send = 0;
 				clearLTE_Temp();
@@ -82,12 +112,69 @@ unsigned char initInternet(void) {
 			// Timeout Conditions
 			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
 				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
-				sysFlag.LTE_ERROR = 1;
+				Error++;
 				sysFlag.LTE_CMD_Send = 0;
 				clearLTE_Temp();
 				clearText_net_Temp();
 				sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
 			}
 		}
+	}
+
+	return Error;
+}
+
+
+//send data to server
+unsigned int httpSend(char* lat, char* lon, char* device_ID, char* time_s, char* date_s, char* x, char* y, char* z, char* humi, char* temp, char* eth, char* carbon, char* airflow, char* out) {
+	memset(HTTP_URL_Temp, 0x00, sizeof(HTTP_URL_Temp));
+	memset(time_temp, 0x00, sizeof(time_temp));
+	memset(date_temp, 0x00, sizeof(date_temp));
+	memset(hh, 0x00, sizeof(hh));
+	memset(mm, 0x00, sizeof(mm));
+	memset(ss, 0x00, sizeof(ss));
+	memset(YY, 0x00, sizeof(YY));
+	memset(MM, 0x00, sizeof(MM));
+	memset(DD, 0x00, sizeof(DD));
+
+	// Delimiter hot fix WuW
+	sprintf(time_temp, "T:%s", time_s);
+	sprintf(date_temp, "D/%s", date_s);
+
+
+	// Delimit
+	Delimiter(time_temp, ':', 1, 80, (unsigned char*) hh);
+	Delimiter(time_temp, ':', 2, 80, (unsigned char*) mm);
+	Delimiter(time_temp, ':', 3, 80, (unsigned char*) ss);
+
+	Delimiter(date_temp, '/', 1, 80, (unsigned char*) DD);
+	Delimiter(date_temp, '/', 2, 80, (unsigned char*) MM);
+	Delimiter(date_temp, '/', 3, 80, (unsigned char*) YY);
+	// Check date and time to 2 digit
+	addZero(hh, hh);
+	addZero(mm, mm);
+	addZero(ss, ss);
+	addZero(YY, YY);
+	addZero(MM, MM);
+	addZero(DD, DD);
+
+	sprintf(HTTP_URL_Temp, "http://rtls.lailab.online/api/ingest_sensor_data?token=%s&device_id=%s&time=%s&date=%s&device_name=%s&x=%s&y=%s&z=%s&humidity=%s&temp=%s&etha=%s&co2=%s&airflow=%s&symbol=Q&date_now=20%s-%s-%sT%s:%s:%s.000Z&lat=%s&lon=%s", TOKEN, device_ID, time_s, date_s, device_ID, x, y, z, humi, temp, eth, carbon, airflow, YY, MM, DD, hh, mm, ss, lat, lon);
+
+	memcpy(out, HTTP_URL_Temp, sizeof(HTTP_URL_Temp));
+
+	return strlen(HTTP_URL_Temp);
+}
+
+
+// Ping to server
+// Return 2 -> not ready
+// Return 1 -> ready
+unsigned char ping(void) {
+	SendCMD_LTE("AT+QPING=1,\"http://rtls.lailab.online\",60,1\r\n");
+	while(findTarget(lteComm_MainBuff, "+QPING") != 1);
+	if(lteComm_MainBuff[8] == 0) {
+		return 1;
+	}else {
+		return 2;
 	}
 }

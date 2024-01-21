@@ -27,7 +27,6 @@ extern "C" {
 
 
 
-
 typedef struct {
 	uint16_t main_ms_counter;
 	uint16_t prev_LTEtimeout;
@@ -42,7 +41,7 @@ typedef struct {
 
 typedef struct {
 	unsigned char LTE_CMD_Send;
-	unsigned char LTE_ERROR;
+	unsigned char LTE_INIT_ERROR;
 }SysFlag_HandleTypeDef;
 
 
@@ -55,7 +54,6 @@ typedef struct {
 typedef struct {
 	char dateStamp[8];
 	char timeStemp[8];
-	char ID[1];
 	char X[6];
 	char Y[6];
 	char Z[6];
@@ -65,6 +63,8 @@ typedef struct {
 	char Carbon[6];
 	char AirFlow[6];
 }Sensor_HandleTypeDef;
+
+
 
 
 

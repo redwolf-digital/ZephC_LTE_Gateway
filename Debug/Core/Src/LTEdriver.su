@@ -1,4 +1,4 @@
 ../Core/Src/LTEdriver.c:20:6:clearText_Temp	8	static
 ../Core/Src/LTEdriver.c:24:6:clearLTE_Temp	8	static
-../Core/Src/LTEdriver.c:33:6:initLTE	16	static
-../Core/Src/LTEdriver.c:126:15:SHUTDOWN_LTE	8	static
+../Core/Src/LTEdriver.c:30:6:initLTE	16	static
+../Core/Src/LTEdriver.c:123:15:SHUTDOWN_LTE	8	static

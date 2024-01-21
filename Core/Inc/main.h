@@ -41,19 +41,21 @@ typedef struct {
 
 typedef struct {
 	unsigned char LTE_CMD_Send;
+	unsigned char LTE_INIT_ERROR;
 	unsigned char LTE_ERROR;
 }SysFlag_HandleTypeDef;
 
 
 typedef struct {
-	char lat[10];
-	char lon[10];
+	char lat[16];
+	char lon[16];
 }GNSS_HandleTypeDef;
 
 
 typedef struct {
-	char dateStamp[8];
-	char timeStemp[8];
+	char COMPID[4];
+	char dateStamp[16];
+	char timeStemp[16];
 	char X[6];
 	char Y[6];
 	char Z[6];
@@ -62,6 +64,7 @@ typedef struct {
 	char Alc[6];
 	char Carbon[6];
 	char AirFlow[6];
+
 }Sensor_HandleTypeDef;
 
 
@@ -96,6 +99,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 
 void sysValinit(void);
 void sensorValInit(void);
+void Clear_Buff_Commu(void);
 
 
 

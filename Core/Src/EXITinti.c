@@ -24,6 +24,9 @@ void initEXIT(void) {
 	EXTI -> RTSR &= ~EXTI_RTSR_TR3;				// Disable rising trigger
 	EXTI -> RTSR |= EXTI_FTSR_TR3;				// Enable falling trigger
 
+//	EXTI -> RTSR |= EXTI_RTSR_TR3;
+//	EXTI -> RTSR &= ~EXTI_FTSR_TR3;
+
 	EXTI -> IMR |= EXTI_IMR_IM3;				// Interrupt Mask 1 = not mask
 }
 

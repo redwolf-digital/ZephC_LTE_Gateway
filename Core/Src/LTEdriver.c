@@ -27,9 +27,6 @@ void clearLTE_Temp(void) {
 
 
 
-
-
-
 void initLTE(void) {
 	SerialDebug("[MCU] -> start initialize LTE module\r\n");
 
@@ -61,11 +58,12 @@ void initLTE(void) {
 				break;
 
 			case 6 :
-				sprintf(TextTemp, "AT+QGPS\r\n");
+				sprintf(TextTemp, "AT+QGPS=1\r\n");
 				break;
 
 		}
 
+		SerialDebug((char *)TextTemp);
 		SendCMD_LTE((char *)TextTemp);	// Sned CMD
 		sysFlag.LTE_CMD_Send = 1;
 		sysCounter.prev_LTEtimeout = sysCounter.main_ms_counter;
@@ -89,9 +87,9 @@ void initLTE(void) {
 
 				// Case 3 : Disable GNSS fail -> ignore error 505
 				if(countSeq == 2 && findTarget(lteComm_MainBuff, "505") == 1) {
-					sysFlag.LTE_ERROR = 0;
+					sysFlag.LTE_INIT_ERROR = 0;
 				}else {
-					sysFlag.LTE_ERROR = 1;
+					sysFlag.LTE_INIT_ERROR = 1;
 				}
 
 				sysFlag.LTE_CMD_Send = 0;
@@ -103,7 +101,7 @@ void initLTE(void) {
 			// Timeout Conditions
 			else if((sysCounter.main_ms_counter - sysCounter.prev_LTEtimeout) >= sysCounter.CMDrespTime) {
 				SerialDebug("[MCU] -> LTE TIME OUT\r\n");
-				sysFlag.LTE_ERROR = 1;
+				sysFlag.LTE_INIT_ERROR = 1;
 				sysFlag.LTE_CMD_Send = 0;
 				clearLTE_Temp();
 				clearText_Temp();
@@ -119,7 +117,6 @@ void initLTE(void) {
 // Shutdown
 /*
  * Return value
- * 			0 - wait
  * 			1 - done
  * 			2 - error/time out
  */
@@ -144,6 +141,4 @@ unsigned char SHUTDOWN_LTE(void) {
 			return 2;
 		}
 	}
-
-	return 0;
 }
