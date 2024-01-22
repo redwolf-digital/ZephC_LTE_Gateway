@@ -13,4 +13,6 @@ extern unsigned char lonTemp[16];
 
 unsigned char callGNSS(void);
 
+void NMEAdecode(const char* nmeaIn, char* out, unsigned char isLat);
+
 #endif /* INC_GNSSPROCESS_H_ */

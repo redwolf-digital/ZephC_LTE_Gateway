@@ -143,6 +143,8 @@ int main(void) {
 		  HAL_Delay(250);
 	  }
 
+
+	  // Reboot after 5 min.
 	  while(sysFlag.LTE_ERROR == 1) {
 		  if(sysCounter.main_ms_counter == 0) {
 			  sysCounter.rebootCount = 0;
@@ -151,7 +153,7 @@ int main(void) {
 			  reboot_min_count++;
 			  sysCounter.rebootCount = sysCounter.main_ms_counter;
 		  }
-		  while(reboot_min_count >= 10) {
+		  while(reboot_min_count >= 5) {
 			  if(SHUTDOWN_LTE() == 1) {
 				  HAL_Delay(50);
 				  HAL_NVIC_SystemReset();
@@ -160,6 +162,11 @@ int main(void) {
 				  sysFlag.LTE_INIT_ERROR = 1;
 				  sysCounter.rebootCount = sysCounter.main_ms_counter;
 			  }
+		  }
+
+		  if(intterruptEvent_Flag == 1) {
+			  SendData_RS485((char*) "X");
+			  intterruptEvent_Flag = 0;
 		  }
 	  }
 

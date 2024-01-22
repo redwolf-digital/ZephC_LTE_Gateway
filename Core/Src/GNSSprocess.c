@@ -40,8 +40,11 @@ unsigned char callGNSS(void) {
 		Delimiter(GNSS_temp, ',', 3, 80, latTemp);
 		Delimiter(GNSS_temp, ',', 5, 80, lonTemp);
 
-		sprintf((char *)latTemp, "%d.%d",atoi((char *)latTemp)/100, atoi((char *)latTemp)%100);
-		sprintf((char *)lonTemp, "%d.%d",atoi((char *)lonTemp)/100, atoi((char *)lonTemp)%100);
+//		sprintf((char *)latTemp, "%d.%d",atoi((char *)latTemp)/100, atoi((char *)latTemp)%100);
+//		sprintf((char *)lonTemp, "%d.%d",atoi((char *)lonTemp)/100, atoi((char *)lonTemp)%100);
+
+		NMEAdecode((char *)latTemp, (char *)latTemp, 1);
+		NMEAdecode((char *)lonTemp, (char *)lonTemp, 0);
 
 		returnValue = 1;
 	}else {
@@ -52,4 +55,23 @@ unsigned char callGNSS(void) {
 	while(findTarget(lteComm_MainBuff, "OK") != 1);
 
 	return returnValue;
+}
+
+
+void NMEAdecode(const char* nmeaIn, char* out, unsigned char isLat) {
+	int nmeaInt = atoi(nmeaIn);
+
+	int degrees = nmeaInt/100;
+	int minutes = nmeaInt - degrees * 100;
+	int decMin = (minutes * 10000) / 6000;
+
+	int ddmmInt = degrees * 100 + decMin;
+
+	if(isLat == 1) {
+		memset(latTemp, 0x00, sizeof(latTemp));
+	}else {
+		memset(lonTemp, 0x00, sizeof(lonTemp));
+	}
+
+	sprintf(out, "%d.%04d", ddmmInt/100, ddmmInt%10000);
 }
