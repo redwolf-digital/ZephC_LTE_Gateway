@@ -1,4 +1,4 @@
-# ZephC LTE Gateway V2
+# ZephC LTE Gateway
 update and backup repo.
 
 ## Quick access
@@ -23,13 +23,17 @@ update and backup repo.
 ### Status port
 | Pin name | Pin descriptins | Port | Pin | Mode |
 | :-- | :-- | :-: | :-- | :-- |
+Debug | general purpose output port for test <br> *normally not used* | B | 1 | OUTPUT |
 BUSY | for tell other device now gateway is busy | B | 5 | OUTPUT |
+ONLINE | for tell other device now gateway is online or offline | B | 6 | OUTPUT |
 RDY | for tell other device now gateway is ready to receive data | B | 7 | OUTPUT |
 RTS | for tell gateway wait to receive data | B | 3 | INPUT *Interrupt* |
 ERROR | if system have error | B | 9 | OUTPUT |
-ACTIVE | Light indicator have activity | B | 6 | OUTPUT |
-CLR_WDT | Clear Ex_WDT | B | 4 | OUTPUT |
 
+### I/O port
+| Pin name | Pin descriptins | Port | Pin | Mode |
+| :-- | :-- | :-: | :-- | :-- |
+RS485_Tx_En | RS485 enable transmit mode | A | 8 | OUTPUT |
 
 ### Communications port
 ***UART1*** - used for communicate between **gateway and master** via UART to ***RS485***
@@ -58,6 +62,14 @@ Stop bit | 1 |
 | :-- | :-: | :-- |
 Tx | A | 2 |
 Rx | A | 3 |
+
+***USB (VCOM)*** - used for debug only  
+*you can used any serial terminal software and baud rate*
+| Pin descriptins | Port | Pin |
+| :-- | :-: | :-- |
+USB DP | A | 12 |
+USB DM | A | 11 |
+
 
 ### RS485 Data frame
 
@@ -98,3 +110,8 @@ B,,,,,,,,,,,,
 15 | Sensor_n_AIR FLOW |
 
 *n = A,B,C,D,E,...*  
+
+
+## Waveform
+![waveform1](img/waveform/waveform1.png)
+<br>timing diagram receive data from RS485<br>

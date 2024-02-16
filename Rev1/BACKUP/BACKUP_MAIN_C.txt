@@ -1,0 +1,501 @@
+/*
+ * Project		: ZephC LTE Gateway
+ * Version		: 1.1
+ * Revision		: 1.0
+ *
+ * Author		: REDWOLF DiGiTAL [C. Worakan]
+ */
+
+#include "main.h"
+#include <string.h>
+#include <stdio.h>
+
+#include "msgProcess.h"
+#include "GNSSprocess.h"
+#include "EXITinti.h"
+#include "LTEdriver.h"
+#include "initernet.h"
+
+
+
+char textBuffer[128];
+char URL_temp[350];
+
+
+char Rx1Buff[Rx1Buff_Size];
+char Rx2Buff[Rx2Buff_Size];
+char dataComm_mainBuff[dataComm_MainBuff_S];
+char lteComm_MainBuff[lteComm_MainBuff_S];
+
+unsigned int URL_len;
+unsigned char sendURL_flag = 0;
+
+
+
+char ENDBYTE[1];
+
+
+// internal flag
+uint8_t AckInternet_ErrCode = 0;
+uint8_t AckInternet_flag = 0;
+uint8_t reboot_min_count = 0;
+
+
+
+TIM_HandleTypeDef htim4;
+UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart2_rx;
+
+// custom HandleTypeDef
+SysTimer_HandleTypeDef sysCounter;
+SysFlag_HandleTypeDef sysFlag;
+GNSS_HandleTypeDef GNSS;
+Sensor_HandleTypeDef SENSOR;
+
+
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_TIM4_Init(void);
+
+
+
+int main(void) {
+
+  sysValinit();
+  sensorValInit();
+
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
+  MX_TIM4_Init();
+
+
+  // TIMER4 START
+  HAL_TIM_Base_Start_IT(&htim4);
+
+
+  // DMA LTE
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)Rx2Buff, Rx2Buff_Size);
+  //__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+
+  //DMA commMaster
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)Rx1Buff, Rx1Buff_Size);
+  //__HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
+
+
+  // INTERRUPT
+  initEXIT();
+  resetWDT();
+
+/*
+ *  ===============================================================================
+ *
+ *  _____ _____ _____ _____    _____ _____ _____ _____ _____ _____ _____ _____
+ * |     |  _  |     |   | |  |  _  | __  |     |   __| __  |  _  |     |   __|
+ * | | | |     |-   -| | | |  |   __|    -|  |  |  |  |    -|     | | | |__   |
+ * |_|_|_|__|__|_____|_|___|  |__|  |__|__|_____|_____|__|__|__|__|_|_|_|_____|
+ *
+ *  ===============================================================================
+ */
+
+  // Wait LTE module boot
+  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);			// BUSY -> 1
+  HAL_GPIO_WritePin(GPIOB, ACTIVE, GPIO_PIN_SET);		// ACTIVE indicator -> 1
+  while(sysCounter.main_ms_counter < 500);				// Wait MCU boot
+  resetWDT();
+  // Initialize LTE module
+  while(sysCounter.main_ms_counter < LTEbootTime)		// Wait LTE module boot
+  resetWDT();
+
+  // Start init LTE module
+  initLTE();
+  resetWDT();
+
+  // Respond after boot finish
+  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);		// BUSY -> 0
+  HAL_GPIO_WritePin(GPIOB, ACTIVE, GPIO_PIN_RESET);		// ACTIVE indicator -> 0
+  // Send RDY signal
+  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
+
+  resetWDT();
+
+
+  while(1) {
+	  // Clear WDT module routine
+	  if(sysCounter.main_ms_counter == 0) {
+		  sysCounter.prev_ClearWDT = 0;
+	  }
+	  while((sysCounter.main_ms_counter - sysCounter.prev_ClearWDT) >= 25000) {
+		  resetWDT();
+		  sysCounter.prev_ClearWDT = sysCounter.main_ms_counter;
+	  }
+
+
+	  // ErrorHandle
+	  //Init error please check system
+	  while(sysFlag.LTE_INIT_ERROR == 1) {
+		  HAL_GPIO_TogglePin(GPIOB, ERROR);
+		  resetWDT();
+		  HAL_Delay(250);
+	  }
+
+
+	  // Reboot after 5 min.
+	  while(sysFlag.LTE_ERROR == 1) {
+		  resetWDT();
+		  if(sysCounter.main_ms_counter == 0) {
+			  sysCounter.rebootCount = 0;
+		  }
+		  if((sysCounter.main_ms_counter - sysCounter.rebootCount) >= 60000) {
+			  reboot_min_count++;
+			  sysCounter.rebootCount = sysCounter.main_ms_counter;
+		  }
+		  while(reboot_min_count >= 5) {
+			  if(SHUTDOWN_LTE() == 1) {
+				  HAL_Delay(50);
+				  HAL_NVIC_SystemReset();
+			  }else {
+				  sysFlag.LTE_ERROR = 0;
+				  sysFlag.LTE_INIT_ERROR = 1;
+				  sysCounter.rebootCount = sysCounter.main_ms_counter;
+			  }
+		  }
+
+		  if(intterruptEvent_Flag == 1) {
+			  SendData_RS485((char*) "X");
+			  intterruptEvent_Flag = 0;
+		  }
+	  }
+
+
+
+
+	  /*
+	   * ------------------------------------------------------------------------------------
+	   * 									MAIN TASK
+	   * ------------------------------------------------------------------------------------
+	   */
+	  while(intterruptEvent_Flag == 1) {
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_SET);				    	// BUSY !!!!
+		  HAL_GPIO_WritePin(GPIOB, ACTIVE, GPIO_PIN_SET);					// ACTIVE indicator -> 1
+		  resetWDT();
+
+		  // Active internet context
+		  if(AckInternet() == 0) {	// PASS
+			  AckInternet_flag = 1;
+			  resetWDT();
+		  }else {	// FAIL
+			  Deactivate();
+			  AckInternet_flag = 0;
+			  SendData_RS485((char*) "X");
+			  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);				    // Clear BUSY
+			  HAL_GPIO_WritePin(GPIOB, ACTIVE, GPIO_PIN_RESET);					// ACTIVE indicator -> 0
+			  intterruptEvent_Flag = 0;
+			  resetWDT();
+		  }
+
+	  MAINTASK :
+		while(AckInternet_flag == 1) {									// Get RTS Signal
+          resetWDT();
+		  // Clear buffer
+		  sensorValInit();
+		  memset(SENSOR.COMPID, 0x00, sizeof(SENSOR.COMPID));
+		  memset(ENDBYTE, 0x00, sizeof(ENDBYTE));
+
+		  // Call GPS
+		  if(callGNSS(GNSS.lat, GNSS.lon) == 1) {
+			  // PASS
+		  }else {
+			  // ERROR
+		  }
+
+
+
+		  resetWDT();
+		  // Send RDY signal
+		  HAL_Delay(10);
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_SET);
+		  HAL_Delay(1);
+		  HAL_GPIO_WritePin(GPIOB, RDY, GPIO_PIN_RESET);
+		  resetWDT();
+
+
+
+		  // Wait DMA put data to buffer
+		  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+		  HAL_Delay(5);
+		  while(*dataComm_mainBuff == '\0') {
+			  // Timeout conditions
+			  if(sysCounter.main_ms_counter == 0) {
+				  sysCounter.prev_msgTimeOut = 0;
+			  }
+
+			  if((sysCounter.main_ms_counter - sysCounter.prev_msgTimeOut) >= 1000) {
+				  SendData_RS485((char*) "F");
+				  intterruptEvent_Flag = 0;
+				  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
+				  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+				  goto MAINTASK;
+			  }
+		  }
+		  sysCounter.prev_msgTimeOut = sysCounter.main_ms_counter;
+		  resetWDT();
+
+
+		  // Check data is valid?
+		  // frame 0 = frame 3 && frame 12 = 'Q'
+		  Delimiter(dataComm_mainBuff, ',', 3, 80, (unsigned char*) SENSOR.COMPID);
+		  Delimiter(dataComm_mainBuff, ',', 12, 80, (unsigned char*) ENDBYTE);
+
+		  if(dataComm_mainBuff[0] == SENSOR.COMPID[0] && ENDBYTE[0] == 'Q') {
+			  resetWDT();
+
+			  // Delimit data
+			  Delimiter(dataComm_mainBuff, ',', 1, 80, (unsigned char*) SENSOR.timeStemp);
+			  Delimiter(dataComm_mainBuff, ',', 2, 80, (unsigned char*) SENSOR.dateStamp);
+			  Delimiter(dataComm_mainBuff, ',', 4, 80, (unsigned char*) SENSOR.X);
+			  Delimiter(dataComm_mainBuff, ',', 5, 80, (unsigned char*) SENSOR.Y);
+			  Delimiter(dataComm_mainBuff, ',', 6, 80, (unsigned char*) SENSOR.Z);
+			  Delimiter(dataComm_mainBuff, ',', 7, 80, (unsigned char*) SENSOR.Huim);
+			  Delimiter(dataComm_mainBuff, ',', 8, 80, (unsigned char*) SENSOR.Temp);
+			  Delimiter(dataComm_mainBuff, ',', 9, 80, (unsigned char*) SENSOR.Alc);
+			  Delimiter(dataComm_mainBuff, ',', 10, 80, (unsigned char*) SENSOR.Carbon);
+			  Delimiter(dataComm_mainBuff, ',', 11, 80, (unsigned char*) SENSOR.AirFlow);
+
+			  resetWDT();
+
+			  // Send data to server
+			  HAL_Delay(1);
+			  memset(URL_temp, 0x00, sizeof(URL_temp));
+			  URL_len = httpSend(GNSS.lat, GNSS.lon, SENSOR.COMPID, SENSOR.timeStemp, SENSOR.dateStamp, SENSOR.X, SENSOR.Y, SENSOR.Z, SENSOR.Huim, SENSOR.Temp, SENSOR.Alc, SENSOR.Carbon, SENSOR.AirFlow, URL_temp);
+
+			  resetWDT();
+
+			  HAL_Delay(10);
+
+			  memset(textBuffer, 0x00, sizeof(textBuffer));
+			  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+
+			  for(unsigned char count = 0; count < 3; count++) {
+				  switch(count) {
+				  	  case 0 :
+				  		  sprintf(textBuffer, "AT+QHTTPURL=%d,80\r\n", URL_len);
+					  	  break;
+
+				  	  case 1 :
+				  		  sprintf(textBuffer, "AT+QHTTPPOST=1,60,60\r\n");
+						  break;
+
+				  	  case 2 :
+				  		  HAL_Delay(3000);
+				  		  sprintf(textBuffer, "AT+QHTTPREAD=80\r\n");
+				  		  break;
+				  }
+
+
+				  SendCMD_LTE((char *) textBuffer);
+				  sendURL_flag = 1;
+
+				  while(sendURL_flag == 1) {
+					  if(findTarget(lteComm_MainBuff, "CONNECT") == 1) {
+						  if(count == 0) {
+							  SendCMD_LTE((char *) URL_temp);
+						  }
+
+						  if(count == 1) {
+							  SendCMD_LTE((char *) "\r");
+						  }
+
+						  if(count == 2) {
+							  SendData_RS485((char*) "P");
+						  }
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+					  }
+
+					  else if(findTarget(lteComm_MainBuff, "OK") == 1) {
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+						  sendURL_flag = 0;
+					  }
+
+
+					  else if(findTarget(lteComm_MainBuff, "ERROR") == 1) {
+						  SendData_RS485((char*) "X");
+
+
+						  memset(textBuffer, 0x00, sizeof(textBuffer));
+						  memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));
+
+						  sysFlag.LTE_ERROR = 1;
+						  sendURL_flag = 0;
+						  intterruptEvent_Flag = 0;
+					  }
+				  }
+			  }
+		  }else {
+			  SendData_RS485((char*) "F");
+			  AckInternet_flag = 0;
+		  }
+
+		  resetWDT();
+
+		  // End data process
+		  Deactivate();	// Deactivate HTTP/TCP-IP context
+		  intterruptEvent_Flag = 0;
+		  AckInternet_flag = 0;
+		  HAL_GPIO_WritePin(GPIOB, BUSY, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(GPIOB, ACTIVE, GPIO_PIN_RESET);
+		}
+	  }
+	// =====================================================================================
+
+
+  } // END MAIN LOOP
+} // END MAIN
+
+
+
+
+
+
+
+
+
+
+
+// user custom functions
+
+
+// init startup value at boot
+void sysValinit(void) {
+	sysCounter.main_ms_counter = 0;
+	sysCounter.prev_LTEtimeout = 0;
+	sysCounter.prev_ERRORtime = 0;
+	sysCounter.rebootCount = 0;
+	sysCounter.prev_ClearWDT = 0;
+
+	sysCounter.CMDrespTime = 1000;	// 1sec.
+
+	sysFlag.LTE_CMD_Send = 0;
+	sysFlag.LTE_INIT_ERROR = 0;
+	sysFlag.LTE_ERROR = 0;
+}
+
+
+// init sensor variable handle
+// set/clear buffer array
+void sensorValInit(void) {
+	SENSOR.COMPID[0] = '\0';
+	SENSOR.dateStamp[0] = '\0';
+	SENSOR.dateStamp[0] = '\0';
+	SENSOR.X[0] = '\0';
+	SENSOR.Y[0] = '\0';
+	SENSOR.Z[0] = '\0';
+	SENSOR.Huim[0] = '\0';
+	SENSOR.Temp[0] = '\0';
+	SENSOR.Alc[0] = '\0';
+	SENSOR.Carbon[0] = '\0';
+	SENSOR.AirFlow[0] = '\0';
+}
+
+
+
+
+// RS485 Tx [Polling method]
+void SendData_RS485(char *msg) {
+	HAL_UART_Transmit(&huart1, (uint8_t *) msg, strlen(msg), 10);
+}
+
+void SendCMD_LTE(char *msg) {
+	HAL_UART_Transmit(&huart2, (uint8_t *) msg, strlen(msg), 64);
+}
+
+
+// UART1/UART2 Rx used DMA
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+	// For LTE module
+	if(huart -> Instance == USART2) {
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)Rx2Buff, Rx2Buff_Size);
+
+		memset(lteComm_MainBuff, 0x00, sizeof(lteComm_MainBuff));				// Clear main buffer
+		memcpy(lteComm_MainBuff, Rx2Buff, Size);								// Copy char from UART buffer -> main buffer
+		memset(Rx2Buff, 0x00, sizeof(Rx2Buff));									// Clear UART buffer
+		__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+	}
+
+	// For communicate with master
+	if(huart -> Instance == USART1) {
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)Rx1Buff, Rx1Buff_Size);
+
+		memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));				// Clear main buffer
+		memcpy(dataComm_mainBuff, Rx1Buff, Size);								// Copy char from UART buffer -> main buffer
+		memset(Rx1Buff, 0x00, sizeof(Rx1Buff));									// Clear UART buffer
+		__HAL_DMA_DISABLE_IT(&hdma_usart1_rx, DMA_IT_HT);
+	}
+}
+
+
+// find target in string
+int findTarget(const char *inStr, const char *target) {
+    int i, j;
+    for (i = 0; inStr[i] != '\0'; i++) {
+        j = 0;
+        while (target[j] != '\0' && inStr[i + j] == target[j]) {
+            j++;
+        }
+        if (target[j] == '\0') {
+            return 1; // Return 1 if found
+        }
+    }
+    return 0; // Return 0 if not found
+}
+
+
+// Timer4 call back
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim -> Instance == TIM4) {
+		sysCounter.main_ms_counter++;
+	}
+}
+
+
+// Clear communication buffer
+void Clear_Buff_Commu(void) {
+	memset(dataComm_mainBuff, 0x00, sizeof(dataComm_mainBuff));
+}
+
+
+void resetWDT(void) {
+	HAL_GPIO_WritePin(GPIOB, RESET_WDT, GPIO_PIN_SET);
+	HAL_Delay(1);
+	HAL_GPIO_WritePin(GPIOB, RESET_WDT, GPIO_PIN_RESET);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

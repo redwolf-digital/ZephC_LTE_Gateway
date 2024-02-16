@@ -1,0 +1,7 @@
+../Core/Src/initernet.c:36:6:clearText_net_Temp	8	static
+../Core/Src/initernet.c:42:6:addZero	16	static
+../Core/Src/initernet.c:53:15:AckInternet	16	static
+../Core/Src/initernet.c:148:14:httpSend	104	static
+../Core/Src/initernet.c:192:15:Activate	8	static
+../Core/Src/initernet.c:239:15:Deactivate	8	static
+../Core/Src/initernet.c:286:15:ping	8	static

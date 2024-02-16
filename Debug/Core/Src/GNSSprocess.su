@@ -1,2 +1,0 @@
-../Core/Src/GNSSprocess.c:29:15:callGNSS	16	static
-../Core/Src/GNSSprocess.c:61:6:NMEAdecode	48	static
