@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "main.h"
 #include "GNSSprocess.h"
 #include "msgProcess.h"
@@ -18,6 +19,8 @@ char* status;
 char GNSS_temp[128];
 unsigned char latTemp[16];
 unsigned char lonTemp[16];
+char latDir[2];
+char lonDir[2];
 
 unsigned char processFlag = 0;
 unsigned char returnValue;
@@ -50,6 +53,9 @@ unsigned char callGNSS(char* lat_out, char* lon_out) {
 	}
 
 	memcpy(GNSS_temp, lteComm_MainBuff, sizeof(GNSS_temp));
+	UART6_Debug("[GPS] -> DUMP\r\n");
+	UART6_Debug(GNSS_temp);
+	UART6_Debug("\r\n");
 	HAL_Delay(2);
 
 	processFlag = NMEACRCCal((unsigned char *) GNSS_temp);
@@ -59,12 +65,18 @@ unsigned char callGNSS(char* lat_out, char* lon_out) {
 		// Clear old pos.
 		memset(lat_out, 0x00, strlen(lat_out));
 		memset(lon_out, 0x00, strlen(lon_out));
+		memset(latDir, 0x00, strlen(latDir));
+		memset(lonDir, 0x00, strlen(lonDir));
+
 		// Delimit
 		Delimiter(GNSS_temp, ',', 3, 80, latTemp);
+		Delimiter(GNSS_temp, ',', 4, 80, (unsigned char *)latDir);
 		Delimiter(GNSS_temp, ',', 5, 80, lonTemp);
+		Delimiter(GNSS_temp, ',', 6, 80, (unsigned char *)lonDir);
+
 		// Put new pos.
-		NMEAdecoder((char *)latTemp, lat_out, 0);
-		NMEAdecoder((char *)lonTemp, lon_out, 1);
+		NMEAdecoder((char *)latTemp, &latDir[0], lat_out);
+		NMEAdecoder((char *)lonTemp, &lonDir[0], lon_out);
 
 		returnValue = 1;
 	}else {
@@ -83,18 +95,18 @@ END:
 }
 
 
-void NMEAdecoder(char* input, char* output, unsigned char mode) {
-    char temp[sizeof(input)+2];
+void NMEAdecoder(char* NMEAin_C, char* dir, char* out) {
+	double conv_f = atof(NMEAin_C);
 
-    for(int index = 0; index < sizeof(input)+2; index++) {
-        *(temp+index) = *(input+index);
-    }
+	int pos_D = (conv_f/100);
+	double pos_M = (conv_f - (pos_D*100));
+	double final_pos = pos_D + (pos_M/60);
 
-    if(mode == 0) { // LAT
-        sprintf(output, "%.6f",(atoi(temp)/100)+(atof(temp+2)/60));
-    }else { // LON
-        sprintf(output, "%.6f",(atoi(temp)/1000)+(atof(temp+3)/60));
-    }
+	if(*dir == 'S' || *dir == 'W') {
+		final_pos = final_pos*-1;
+	}
+
+	sprintf(out, "%.6f", final_pos);
 
 }
 
