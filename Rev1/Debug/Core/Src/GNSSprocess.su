@@ -1,2 +1,4 @@
-../Core/Src/GNSSprocess.c:32:15:callGNSS	24	static
-../Core/Src/GNSSprocess.c:98:6:NMEAdecoder	72	static
+../Core/Src/GNSSprocess.c:64:15:callGNSS	32	static
+../Core/Src/GNSSprocess.c:138:6:NMEAdecoder	72	static
+../Core/Src/GNSSprocess.c:154:6:NMEAgetTime	32	static
+../Core/Src/GNSSprocess.c:179:6:NMEAgetDate	32	static

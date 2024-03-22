@@ -29,11 +29,17 @@ extern "C" {
 
 
 typedef struct {
-	uint16_t main_ms_counter;
-	uint16_t prev_LTEtimeout;
-	uint16_t prev_ERRORtime;
-	uint16_t prev_msgTimeOut;
-	uint16_t prev_ClearWDT;
+//	uint16_t main_ms_counter;
+//	uint16_t prev_LTEtimeout;
+//	uint16_t prev_ERRORtime;
+//	uint16_t prev_msgTimeOut;
+//	uint16_t prev_ClearWDT;
+	uint32_t main_ms_counter;
+	uint32_t prev_LTEtimeout;
+	uint32_t prev_ERRORtime;
+	uint32_t prev_msgTimeOut;
+	uint32_t prev_ClearWDT;
+	uint32_t prev_GPSupdate;
 
 	uint8_t rebootCount;
 
@@ -45,12 +51,15 @@ typedef struct {
 	unsigned char LTE_CMD_Send;
 	unsigned char LTE_INIT_ERROR;
 	unsigned char LTE_ERROR;
+	unsigned char UPDATE_GPS;
 }SysFlag_HandleTypeDef;
 
 
 typedef struct {
 	char lat[16];
 	char lon[16];
+	char time[16];
+	char date[16];
 }GNSS_HandleTypeDef;
 
 

@@ -144,6 +144,15 @@ unsigned char AckInternet(void) {
 }
 
 
+//send GPS to server
+unsigned int gpsSend(char* lat, char* lon, char* Time_S, char* Date_S, char* out) {
+	memset(HTTP_URL_Temp, 0x00, sizeof(HTTP_URL_Temp));
+	sprintf(HTTP_URL_Temp, "http://rtls.lailab.online/api/ingest_gps_sensor_data?token=%s&device_name=GATEWAY&date_now=%sT%sZ&lat=%s&lon=%s", TOKEN, Date_S, Time_S, lat, lon);
+	memcpy(out, HTTP_URL_Temp, sizeof(HTTP_URL_Temp));
+	return strlen(HTTP_URL_Temp);
+}
+
+
 //send data to server
 unsigned int httpSend(char* lat, char* lon, char* device_ID, char* time_s, char* date_s, char* x, char* y, char* z, char* humi, char* temp, char* eth, char* carbon, char* airflow, char* out) {
 	memset(HTTP_URL_Temp, 0x00, sizeof(HTTP_URL_Temp));

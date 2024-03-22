@@ -301,7 +301,7 @@ int main(void) {
 
 				HAL_Delay(10);
 				// Call GPS
-				if(callGNSS(GNSS.lat, GNSS.lon) == 1) {
+				if(callGNSS(GNSS.lat, GNSS.lon, GNSS.time, GNSS.date) == 1) {
 					UART6_Debug("[GPS] -> NMEA CRC PASS\r\n");
 				}else {
 					UART6_Debug("[GPS] -> NMEA CRC INVALID/FAIL\r\n");
